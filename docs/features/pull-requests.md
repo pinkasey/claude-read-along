@@ -1,6 +1,6 @@
 # Pull requests
 
-Status: **In review**
+Status: **Shipped**
 
 ## Loading a pull request
 

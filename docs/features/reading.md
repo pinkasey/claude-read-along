@@ -1,6 +1,6 @@
 # Reading
 
-Status: **In review**
+Status: **Shipped**
 
 ## Sections
 

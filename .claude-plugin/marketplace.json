@@ -1,0 +1,14 @@
+{
+  "name": "claude-read-along",
+  "description": "Read-Along: review markdown in pull requests by listening, with Claude.",
+  "owner": {
+    "name": "pinkasey"
+  },
+  "plugins": [
+    {
+      "name": "read-along",
+      "source": "./",
+      "description": "Review markdown in pull requests by listening, with comments, edits and voice commands, posted when you confirm."
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # Voice commands
 
-Status: **In review**
+Status: **Shipped**
 
 The page cannot use the microphone itself (see [product.md](../product.md#platform-constraints)). Voice commands are dictated into the **command box** above the player with the operating system's dictation: Win+H on Windows, the keyboard's microphone on phones. Typing into the box works the same way.
 
