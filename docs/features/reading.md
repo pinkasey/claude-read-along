@@ -33,6 +33,7 @@ A section that has an edit is read as edited.
 - The section being read has a highlight and a marker on its left edge, and is scrolled to the middle of the screen.
 - Inside headings, paragraphs, list items and quotes, the sentence being spoken has a stronger highlight. Browsers without the CSS Custom Highlight API keep the section highlight only.
 - The header (title, pull request, file picker, counts and buttons) stays at the top while scrolling, so switching files is always one click away. On a phone it is compact: one line each for the title and the pull request, the file picker, and one row of counts and buttons that scrolls sideways.
+- Each panel has a chevron in its corner that folds it to a single line: the top panel to the document title, the bottom panel to what is being read and the play, previous, next and repeat buttons. The chevron unfolds it again, and the page remembers each panel's state.
 - The player bar shows the current line, the position (for example 7/42), the section's first words, and a progress bar.
 
 ## Navigation

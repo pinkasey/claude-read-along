@@ -1,6 +1,6 @@
 <title>Read-Along Review</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="read-along-version" content="0.1.4">
+<meta name="read-along-version" content="0.1.5">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&family=Literata:opsz,wght@7..72,400;7..72,600;7..72,700&display=swap">
@@ -172,6 +172,27 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
 .toggle { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
 .kbd { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
 @media (max-width: 640px) { .kbd { display: none; } .settings select { max-width: 130px; } .unit { grid-template-columns: 30px minmax(0, 1fr); } .doc { font-size: 17px; } }
+/* Both panels fold to a single line with the chevron in their corner. */
+.fold { position: absolute; top: 6px; right: max(8px, env(safe-area-inset-right, 0px)); width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); display: grid; place-items: center; padding: 0; z-index: 2; }
+.fold:hover { color: var(--ink); border-color: var(--muted); }
+.fold svg { width: 18px; height: 18px; transition: transform .15s; }
+header.top .wrap { position: relative; }
+header.top .doc-id { padding-right: 34px; }
+.player .wrap { position: relative; }
+.player .now { padding-right: 38px; }
+/* top panel folded: the title alone; the chevron points down to unfold */
+header.top.folded .wrap { padding-block: 6px; }
+header.top.folded .doc-id .meta, header.top.folded .file-pick, header.top.folded .pending { display: none; }
+header.top.folded .doc-id h1 { font-size: 15px; white-space: nowrap; text-wrap: nowrap; overflow: hidden; text-overflow: ellipsis; }
+header.top.folded .fold { top: 3px; }
+header.top.folded .fold svg { transform: rotate(180deg); }
+/* bottom panel folded: what is being read and the transport buttons; the chevron points up to unfold */
+.player.folded .cmd-row, .player.folded .cmd-feedback, .player.folded .cmd-help, .player.folded .actions, .player.folded .settings { display: none !important; }
+.player.folded .wrap { gap: 6px; padding-block: 6px; }
+.player.folded .icon-btn { width: 38px; height: 38px; }
+.player.folded .icon-btn.play { width: 44px; height: 44px; }
+.player:not(.folded) .fold svg { transform: rotate(180deg); }
+.player.folded .fold svg { transform: none; }
 /* On a phone the settings fold behind a button, leaving room for the text. */
 #settingsBtn { display: none; }
 @media (max-width: 640px) {
@@ -268,6 +289,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
       <button class="btn small" id="loadBtn">Load file</button>
       <button class="btn small primary" id="postBtn">Post review</button>
     </div>
+    <button type="button" class="fold" id="foldHeader" aria-expanded="true" aria-label="Fold the top panel" title="Fold the top panel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
   </div>
 </header>
 
@@ -282,6 +304,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
 
 <div class="player" role="region" aria-label="Reader controls">
   <div class="wrap">
+    <button type="button" class="fold" id="foldPlayer" aria-expanded="true" aria-label="Fold the bottom panel" title="Fold the bottom panel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     <div class="now"><span class="where" id="nowWhere">—</span><span class="what" id="nowWhat">Press play or click any section to start reading.</span></div>
     <div class="progress" aria-hidden="true"><div id="progressBar"></div></div>
     <div class="cmd-row" id="cmdRow">
@@ -1034,6 +1057,21 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
   $("prevBtn").addEventListener("click", prev);
   $("repeatBtn").addEventListener("click", repeat);
   $("noteBtn").addEventListener("click", () => openComposer("note"));
+  // Folding the top and bottom panels; each is remembered in this browser.
+  function foldPanel(which, folded) {
+    const el = which === "header" ? document.querySelector("header.top") : document.querySelector(".player");
+    const btn = $(which === "header" ? "foldHeader" : "foldPlayer");
+    const name = which === "header" ? "top" : "bottom";
+    el.classList.toggle("folded", folded);
+    btn.setAttribute("aria-expanded", String(!folded));
+    btn.setAttribute("aria-label", (folded ? "Unfold" : "Fold") + " the " + name + " panel");
+    btn.title = btn.getAttribute("aria-label");
+    ls.set("fold:" + which, folded);
+  }
+  $("foldHeader").addEventListener("click", () => foldPanel("header", !document.querySelector("header.top").classList.contains("folded")));
+  $("foldPlayer").addEventListener("click", () => foldPanel("player", !document.querySelector(".player").classList.contains("folded")));
+  foldPanel("header", ls.get("fold:header", false) === true);
+  foldPanel("player", ls.get("fold:player", false) === true);
   function showSettings(on) {
     document.querySelector(".player").classList.toggle("show-settings", on);
     $("settingsBtn").setAttribute("aria-expanded", String(on));

@@ -141,3 +141,27 @@ test("on a phone the settings fold behind a Settings button; on a desktop they a
   assert.deepEqual([d.shown, d.button], [true, false]);
   await desk.close();
 });
+
+for (const vp of [{ width: 1280, height: 800, name: "desktop" }, { width: 390, height: 844, name: "phone" }]) {
+  test(`the top and bottom panels fold to one line and unfold (${vp.name})`, async () => {
+    const t = await open({ local: SAMPLE_LOCAL, viewport: vp });
+    const h = () => t.q(() => ({ header: document.querySelector("header.top").offsetHeight, player: document.querySelector(".player").offsetHeight }));
+    const before = await h();
+    await t.page.click("#foldHeader"); await t.page.click("#foldPlayer"); await t.page.waitForTimeout(100);
+    const folded = await h();
+    assert.ok(folded.header <= 48, "folded top panel " + folded.header);
+    assert.ok(folded.player <= 120, "folded bottom panel " + folded.player);
+    assert.equal(await t.page.isVisible("#docTitle"), true);
+    assert.equal(await t.page.isVisible("#playBtn"), true, "play stays in reach");
+    assert.equal(await t.page.isVisible("#cmdIn"), false);
+    assert.equal(await t.page.getAttribute("#foldHeader", "aria-expanded"), "false");
+    await t.page.click("#playBtn"); await t.page.waitForTimeout(100);
+    assert.ok(await t.lastSpoken(), "playing works while folded");
+    await t.page.reload(); await t.page.waitForTimeout(400);
+    assert.deepEqual(await h(), folded, "remembered after reload");
+    await t.page.click("#foldHeader"); await t.page.click("#foldPlayer"); await t.page.waitForTimeout(100);
+    assert.deepEqual(await h(), before, "unfolds to the same size");
+    await t.close();
+  });
+}
+
