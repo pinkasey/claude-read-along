@@ -1430,9 +1430,9 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
         const branch = pr.headRef || "the pull request branch";
         const L = [];
         if (c.noteIn) L.push(["", c.noteIn, plural(c.noteIn, "comment").replace(/^\d+ /, "") + " on changed lines → review comments on those lines"]);
-        if (c.editIn) L.push(st.editMode === "commit" ? ["commit", c.editIn, plural(c.editIn, "edit").replace(/^\d+ /, "") + " on changed lines → committed to " + branch] : ["", c.editIn, plural(c.editIn, "edit").replace(/^\d+ /, "") + " on changed lines → suggested changes the author can apply"]);
+        if (c.editIn) L.push(st.editMode === "commit" ? ["commit", c.editIn, plural(c.editIn, "edit").replace(/^\d+ /, "") + " on changed lines → committed to " + branch + ", each with a one-click revert comment"] : ["", c.editIn, plural(c.editIn, "edit").replace(/^\d+ /, "") + " on changed lines → suggested changes the author can apply"]);
         if (c.noteOut) L.push(st.outside === "anchor" ? ["commit", c.noteOut, plural(c.noteOut, "comment").replace(/^\d+ /, "") + " on unchanged lines → a <!-- review comment --> marker committed after the section, with the comment on it"] : ["", c.noteOut, plural(c.noteOut, "comment").replace(/^\d+ /, "") + " on unchanged lines → listed in the review summary"]);
-        if (c.editOut) L.push(st.outside === "anchor" ? ["commit", c.editOut, plural(c.editOut, "edit").replace(/^\d+ /, "") + " on unchanged lines → committed to " + branch + ", with a comment on each"] : ["", c.editOut, plural(c.editOut, "edit").replace(/^\d+ /, "") + " on unchanged lines → listed in the review summary, before and after"]);
+        if (c.editOut) L.push(st.outside === "anchor" ? ["commit", c.editOut, plural(c.editOut, "edit").replace(/^\d+ /, "") + " on unchanged lines → committed to " + branch + ", each with a one-click revert comment"] : ["", c.editOut, plural(c.editOut, "edit").replace(/^\d+ /, "") + " on unchanged lines → listed in the review summary, before and after"]);
         const commits = L.some((l) => l[0] === "commit");
         const ref = pr.repo + "#" + pr.number;
         const sentence = "Post my review for " + ref + ".";
@@ -1441,7 +1441,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
             : "<p>You have no comments or edits on this pull request yet.</p>") +
           '<fieldset><legend>Edits on changed lines</legend>' +
           '<label class="opt"><input type="radio" name="em" value="suggest"' + (st.editMode === "suggest" ? " checked" : "") + '> Suggest edits<small>Review comments with suggested changes. The author applies them with one click.</small></label>' +
-          '<label class="opt"><input type="radio" name="em" value="commit"' + (st.editMode === "commit" ? " checked" : "") + '> Commit inline<small>Claude commits the edits to the pull request branch.</small></label></fieldset>' +
+          '<label class="opt"><input type="radio" name="em" value="commit"' + (st.editMode === "commit" ? " checked" : "") + '> Commit inline<small>Claude commits the edits to the pull request branch, and comments on each with a one-click revert.</small></label></fieldset>' +
           '<fieldset><legend>Comments and edits on unchanged lines</legend>' +
           '<label class="opt"><input type="radio" name="out" value="summary"' + (st.outside === "summary" ? " checked" : "") + '> List in the summary<small>Nothing is committed. They go in the review summary with their line numbers.</small></label>' +
           '<label class="opt"><input type="radio" name="out" value="anchor"' + (st.outside === "anchor" ? " checked" : "") + '> Commit and comment<small>GitHub only takes comments on lines in the diff, so Claude commits a marker (for a comment) or your edited text (for an edit), and comments on it.</small></label></fieldset>' +

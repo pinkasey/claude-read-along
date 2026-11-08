@@ -212,15 +212,15 @@ def describe(plan):
     out = [f"Review for {plan['repo']}#{plan['number']} (branch {plan['headRef']}):"]
     if c["comment"]: out.append(f"  {plural(c['comment'], 'comment')} on changed lines -> review comments")
     if c["suggest"]: out.append(f"  {plural(c['suggest'], 'edit')} on changed lines -> suggested changes")
-    if c["commit"]: out.append(f"  {plural(c['commit'], 'edit')} on changed lines -> committed")
+    if c["commit"]: out.append(f"  {plural(c['commit'], 'edit')} on changed lines -> committed, with a one-click revert comment")
     if c["commit-marker"]: out.append(f"  {plural(c['commit-marker'], 'comment')} on unchanged lines -> marker committed, comment on it")
-    if c["commit-comment"]: out.append(f"  {plural(c['commit-comment'], 'edit')} on unchanged lines -> committed, comment on it")
+    if c["commit-comment"]: out.append(f"  {plural(c['commit-comment'], 'edit')} on unchanged lines -> committed, with a one-click revert comment")
     if c["summary"]: out.append(f"  {plural(c['summary'], 'item')} -> listed in the review summary")
     if plan["commitItems"]:
         out.append(f"  Commits {plural(plan['commitItems'], 'item')} as {plural(plan['commitLines'], 'line')} "
                    f"in {', '.join(plan['commitFiles'])}")
-    labels = {"comment": "comment", "suggest": "suggested change", "commit": "commit",
-              "commit-marker": "commit marker + comment", "commit-comment": "commit + comment", "summary": "summary"}
+    labels = {"comment": "comment", "suggest": "suggested change", "commit": "commit + revert comment",
+              "commit-marker": "commit marker + comment", "commit-comment": "commit + revert comment", "summary": "summary"}
     out.append("Items:")
     for x in sorted(plan["actions"], key=lambda x: (x["path"], x["line"])):
         what = x["text"] if x["source"] == "note" else ("-> " + " / ".join(x["new"]) if x.get("new") else x["text"])
@@ -365,7 +365,8 @@ def execute(plan_path, repo_dir=None):
             body = x["text"] + "\n\n<sub>This line is a marker committed during review so this comment could be placed here. " \
                                "Commit the suggestion below to remove it.</sub>\n\n" + removal_suggestion()
             comments.append({"x": x, "c": {"path": x["path"], "line": x["newLine"], "side": "RIGHT", "body": body}})
-        elif x["do"] == "commit-comment":
+        elif x["do"] in ("commit", "commit-comment"):
+            # Every edit committed to someone else's branch gets a one-click revert.
             short = commits[-1]["sha"][:7] if commits else ""
             body = revert_comment_body(short, x["old"])
             c = {"path": x["path"], "line": x["newEndLine"], "side": "RIGHT", "body": body}

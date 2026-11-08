@@ -12,7 +12,7 @@ GitHub accepts review comments only on lines inside the pull request's diff (cha
 
 | Setting | Built-in default | Alternative |
 | --- | --- | --- |
-| **Edits on changed lines** | **Suggest edits**: review comments with suggested changes, which the author applies with one click | **Commit inline**: Claude commits the edits to the pull request's branch |
+| **Edits on changed lines** | **Suggest edits**: review comments with suggested changes, which the author applies with one click | **Commit inline**: Claude commits the edits to the pull request's branch, each with a one-click revert comment |
 | **Comments and edits on unchanged lines** | **List in the summary**: nothing is committed; they go in the review summary with their line numbers | **Commit and comment**: Claude commits a marker for a comment, or the edited text for an edit, and comments on it |
 
 - Each person's choice is saved as their own default, privately, and follows them across devices. Without a saved choice, the built-in defaults apply.
@@ -26,7 +26,7 @@ GitHub accepts review comments only on lines inside the pull request's diff (cha
 | Comment | Outside the diff, **List in the summary** | Listed in the review summary with its file, line and the section's first words |
 | Comment | Outside the diff, **Commit and comment** | A `<!-- review comment -->` line is committed right after the section (indented to stay inside a list item), and the comment is posted as a comment on that line. The comment ends with a short explanation and an empty suggested change, so the author removes the marker with one click (**Commit suggestion**). The page does not read the explanation aloud. |
 | Edit | Inside the diff, **Suggest edits** | A suggested change replacing the section's lines |
-| Edit | Inside the diff, **Commit inline** | Committed to the branch; listed under "Committed during review" in the summary |
+| Edit | Inside the diff, **Commit inline** | Committed to the branch, with a comment on the new lines offering a one-click revert (as below); the commit is also listed under "Committed during review" in the summary |
 | Edit | Outside the diff, **List in the summary** | Listed in the summary with the suggested text |
 | Edit | Outside the diff, **Commit and comment** | Committed, with a comment on the new lines that says so and offers a one-click revert: "_To **REVERT** this change, press **Commit suggestion** below._", followed by a suggested change that restores the original lines |
 | Edit whose original text is no longer at its line | Anywhere | Listed in the summary, with the reason |
@@ -36,6 +36,7 @@ Everything goes into one review (state "comment"; never "approve" or "request ch
 ## Confirmation
 
 - Before posting, Claude shows the plan: how many comments, suggestions and commits, on which branch, and every item with its file, line and text.
+- Every committed edit, inside or outside the diff, gets a comment saying it was committed during review, with a one-click revert.
 - When the plan commits anything, Claude asks first: "Commit X edits as Y lines to BRANCH? Alternatively, post them as comments with suggested edits." with the choices **Commit inline** and **Suggest edits**. Nothing is committed without that answer, even when the request came from the page.
 
 ## Safety
