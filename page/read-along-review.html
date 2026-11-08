@@ -219,6 +219,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
 .plan .pl b { text-align: right; font-variant-numeric: tabular-nums; }
 .plan .pl.commit b, .plan .pl.commit span { color: var(--note); }
 .panel .saved-note { font-size: 13px; }
+.panel .revert-opt { padding: 0 12px; }
 .warnbox { background: var(--note-bg); color: var(--ink); border-left: 3px solid var(--note); border-radius: 8px; padding: 8px 12px; font-size: 14px; }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--player-h) + 12px); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 14px; z-index: 30; max-width: calc(100vw - 32px); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
@@ -1272,7 +1273,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
   // Claude Code Remote connector. Where that is unavailable it shows the sentence to paste into the chat.
   // Review settings: built-in defaults, overridden by each person's own saved choice
   // (kept in their private part of the page's database, so it follows them across devices).
-  const REVIEW_DEFAULTS = { editMode: "suggest", outside: "summary" };
+  const REVIEW_DEFAULTS = { editMode: "suggest", outside: "summary", revert: true };
   S.reviewSettings = Object.assign({}, REVIEW_DEFAULTS, ls.get("reviewSettings", {}));
   S.settingsRef = null;
   S.sessionId = null;
@@ -1430,9 +1431,9 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
         const branch = pr.headRef || "the pull request branch";
         const L = [];
         if (c.noteIn) L.push(["", c.noteIn, plural(c.noteIn, "comment").replace(/^\d+ /, "") + " on changed lines → review comments on those lines"]);
-        if (c.editIn) L.push(st.editMode === "commit" ? ["commit", c.editIn, plural(c.editIn, "edit").replace(/^\d+ /, "") + " on changed lines → committed to " + branch + ", each with a one-click revert comment"] : ["", c.editIn, plural(c.editIn, "edit").replace(/^\d+ /, "") + " on changed lines → suggested changes the author can apply"]);
+        if (c.editIn) L.push(st.editMode === "commit" ? ["commit", c.editIn, plural(c.editIn, "edit").replace(/^\d+ /, "") + " on changed lines → committed to " + branch + (st.revert ? ", each with a one-click revert comment" : "")] : ["", c.editIn, plural(c.editIn, "edit").replace(/^\d+ /, "") + " on changed lines → suggested changes the author can apply"]);
         if (c.noteOut) L.push(st.outside === "anchor" ? ["commit", c.noteOut, plural(c.noteOut, "comment").replace(/^\d+ /, "") + " on unchanged lines → a <!-- review comment --> marker committed after the section, with the comment on it"] : ["", c.noteOut, plural(c.noteOut, "comment").replace(/^\d+ /, "") + " on unchanged lines → listed in the review summary"]);
-        if (c.editOut) L.push(st.outside === "anchor" ? ["commit", c.editOut, plural(c.editOut, "edit").replace(/^\d+ /, "") + " on unchanged lines → committed to " + branch + ", each with a one-click revert comment"] : ["", c.editOut, plural(c.editOut, "edit").replace(/^\d+ /, "") + " on unchanged lines → listed in the review summary, before and after"]);
+        if (c.editOut) L.push(st.outside === "anchor" ? ["commit", c.editOut, plural(c.editOut, "edit").replace(/^\d+ /, "") + " on unchanged lines → committed to " + branch + (st.revert ? ", each with a one-click revert comment" : "")] : ["", c.editOut, plural(c.editOut, "edit").replace(/^\d+ /, "") + " on unchanged lines → listed in the review summary, before and after"]);
         const commits = L.some((l) => l[0] === "commit");
         const ref = pr.repo + "#" + pr.number;
         const sentence = "Post my review for " + ref + ".";
@@ -1441,24 +1442,26 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
             : "<p>You have no comments or edits on this pull request yet.</p>") +
           '<fieldset><legend>Edits on changed lines</legend>' +
           '<label class="opt"><input type="radio" name="em" value="suggest"' + (st.editMode === "suggest" ? " checked" : "") + '> Suggest edits<small>Review comments with suggested changes. The author applies them with one click.</small></label>' +
-          '<label class="opt"><input type="radio" name="em" value="commit"' + (st.editMode === "commit" ? " checked" : "") + '> Commit inline<small>Claude commits the edits to the pull request branch, and comments on each with a one-click revert.</small></label></fieldset>' +
+          '<label class="opt"><input type="radio" name="em" value="commit"' + (st.editMode === "commit" ? " checked" : "") + '> Commit inline<small>Claude commits the edits to the pull request branch.</small></label></fieldset>' +
           '<fieldset><legend>Comments and edits on unchanged lines</legend>' +
           '<label class="opt"><input type="radio" name="out" value="summary"' + (st.outside === "summary" ? " checked" : "") + '> List in the summary<small>Nothing is committed. They go in the review summary with their line numbers.</small></label>' +
           '<label class="opt"><input type="radio" name="out" value="anchor"' + (st.outside === "anchor" ? " checked" : "") + '> Commit and comment<small>GitHub only takes comments on lines in the diff, so Claude commits a marker (for a comment) or your edited text (for an edit), and comments on it.</small></label></fieldset>' +
+          '<label class="opt revert-opt"><input type="checkbox" id="revertChk"' + (st.revert ? " checked" : "") + '> Add revert comments to committed edits<small>Each edit Claude commits gets a comment with a one-click suggestion that puts the original text back.</small></label>' +
           '<p class="saved-note">' + (S.settingsRef ? "These choices are saved as your defaults, on every device." : "These choices are saved as your defaults in this browser.") + "</p>" +
           (commits ? '<div class="warnbox">This review commits to <b>' + esc(branch) + "</b>. Claude asks you to confirm in the chat before committing anything.</div>" : "") +
           '<div class="say"><span>' + esc(sentence) + "</span></div>" +
           '<div class="row"><button class="btn primary" id="postGo"' + (plan.total ? "" : " disabled") + '>Ask Claude to post</button><button class="btn" id="postClose">Close</button></div>' +
           '<div class="status" id="postStatus" aria-live="polite"></div>';
         p.querySelector(".say").appendChild(copyBtn(sentence));
-        p.querySelectorAll("input[type=radio]").forEach((r) => r.addEventListener("change", () => {
-          S.reviewSettings = { editMode: p.querySelector("input[name=em]:checked").value, outside: p.querySelector("input[name=out]:checked").value };
+        p.querySelectorAll("input[type=radio], #revertChk").forEach((r) => r.addEventListener("change", () => {
+          S.reviewSettings = { editMode: p.querySelector("input[name=em]:checked").value, outside: p.querySelector("input[name=out]:checked").value, revert: p.querySelector("#revertChk").checked };
           saveReviewSettings(); draw();
         }));
         p.querySelector("#postClose").addEventListener("click", closePanel);
         p.querySelector("#postGo").addEventListener("click", () => sendToClaude("[Read-Along page] " + sentence +
           " Settings: edits on changed lines = " + (S.reviewSettings.editMode === "commit" ? "commit inline" : "suggest edits") +
-          "; comments and edits on unchanged lines = " + (S.reviewSettings.outside === "anchor" ? "commit and comment" : "list in the summary") + ".", p.querySelector("#postStatus"), p.querySelector("#postGo")));
+          "; comments and edits on unchanged lines = " + (S.reviewSettings.outside === "anchor" ? "commit and comment" : "list in the summary") +
+          "; revert comments on committed edits = " + (S.reviewSettings.revert ? "on" : "off") + ".", p.querySelector("#postStatus"), p.querySelector("#postGo")));
         if (plan.total) checkConnector(p.querySelector("#postStatus"), p.querySelector("#postGo"));
       };
       draw();
@@ -1488,7 +1491,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
       S.settingsRef.onSnapshot((snap) => {
         if (!snap.exists) return;
         const d = snap.data();
-        S.reviewSettings = { editMode: d.editMode === "commit" ? "commit" : "suggest", outside: d.outside === "anchor" ? "anchor" : "summary" };
+        S.reviewSettings = { editMode: d.editMode === "commit" ? "commit" : "suggest", outside: d.outside === "anchor" ? "anchor" : "summary", revert: d.revert !== false };
         ls.set("reviewSettings", S.reviewSettings);
       }, () => {});
     } catch {}

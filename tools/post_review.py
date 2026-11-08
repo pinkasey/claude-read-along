@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Post a Read-Along review to its pull request, in two steps.
 
-  post_review.py plan    --pr OWNER/REPO NUMBER --data DIR [--edit-mode suggest|commit] [--outside summary|anchor] --out PLAN.json
+  post_review.py plan    --pr OWNER/REPO NUMBER --data DIR [--edit-mode suggest|commit] [--outside summary|anchor]
+                         [--revert-comments on|off] --out PLAN.json
   post_review.py execute --plan PLAN.json --out RESULT.json [--repo-dir CLONE]
 
 DIR holds the page's comments and edits as exported from its database (comments are stored in its
@@ -199,7 +200,8 @@ def make_plan(a):
     committed_lines = sum(len(x["new"]) if x["source"] == "edit" else 1 for x in commit_actions)
     plan = {
         "repo": repo, "number": number, "url": pr["html_url"], "headSha": head_sha, "headRef": head_ref,
-        "editMode": a.edit_mode, "outside": a.outside, "actions": actions, "warnings": warnings,
+        "editMode": a.edit_mode, "outside": a.outside, "revertComments": a.revert_comments == "on",
+        "actions": actions, "warnings": warnings,
         "counts": {k: sum(1 for x in actions if x["do"] == k) for k in ["comment", "suggest", "commit", "commit-marker", "commit-comment", "summary"]},
         "commitItems": len(commit_actions), "commitLines": committed_lines,
         "commitFiles": sorted({x["path"] for x in commit_actions}),
@@ -212,15 +214,17 @@ def describe(plan):
     out = [f"Review for {plan['repo']}#{plan['number']} (branch {plan['headRef']}):"]
     if c["comment"]: out.append(f"  {plural(c['comment'], 'comment')} on changed lines -> review comments")
     if c["suggest"]: out.append(f"  {plural(c['suggest'], 'edit')} on changed lines -> suggested changes")
-    if c["commit"]: out.append(f"  {plural(c['commit'], 'edit')} on changed lines -> committed, with a one-click revert comment")
+    rv = ", with a one-click revert comment" if plan.get("revertComments", True) else ""
+    if c["commit"]: out.append(f"  {plural(c['commit'], 'edit')} on changed lines -> committed{rv}")
     if c["commit-marker"]: out.append(f"  {plural(c['commit-marker'], 'comment')} on unchanged lines -> marker committed, comment on it")
-    if c["commit-comment"]: out.append(f"  {plural(c['commit-comment'], 'edit')} on unchanged lines -> committed, with a one-click revert comment")
+    if c["commit-comment"]: out.append(f"  {plural(c['commit-comment'], 'edit')} on unchanged lines -> committed{rv}")
     if c["summary"]: out.append(f"  {plural(c['summary'], 'item')} -> listed in the review summary")
     if plan["commitItems"]:
         out.append(f"  Commits {plural(plan['commitItems'], 'item')} as {plural(plan['commitLines'], 'line')} "
                    f"in {', '.join(plan['commitFiles'])}")
-    labels = {"comment": "comment", "suggest": "suggested change", "commit": "commit + revert comment",
-              "commit-marker": "commit marker + comment", "commit-comment": "commit + revert comment", "summary": "summary"}
+    rc = " + revert comment" if plan.get("revertComments", True) else ""
+    labels = {"comment": "comment", "suggest": "suggested change", "commit": "commit" + rc,
+              "commit-marker": "commit marker + comment", "commit-comment": "commit" + rc, "summary": "summary"}
     out.append("Items:")
     for x in sorted(plan["actions"], key=lambda x: (x["path"], x["line"])):
         what = x["text"] if x["source"] == "note" else ("-> " + " / ".join(x["new"]) if x.get("new") else x["text"])
@@ -365,8 +369,8 @@ def execute(plan_path, repo_dir=None):
             body = x["text"] + "\n\n<sub>This line is a marker committed during review so this comment could be placed here. " \
                                "Commit the suggestion below to remove it.</sub>\n\n" + removal_suggestion()
             comments.append({"x": x, "c": {"path": x["path"], "line": x["newLine"], "side": "RIGHT", "body": body}})
-        elif x["do"] in ("commit", "commit-comment"):
-            # Every edit committed to someone else's branch gets a one-click revert.
+        elif x["do"] in ("commit", "commit-comment") and plan.get("revertComments", True):
+            # Each edit committed to someone else's branch gets a one-click revert (a setting, on by default).
             short = commits[-1]["sha"][:7] if commits else ""
             body = revert_comment_body(short, x["old"])
             c = {"path": x["path"], "line": x["newEndLine"], "side": "RIGHT", "body": body}
@@ -418,6 +422,8 @@ if __name__ == "__main__":
     p.add_argument("--data", required=True)
     p.add_argument("--edit-mode", choices=["suggest", "commit"], default="suggest")
     p.add_argument("--outside", choices=["summary", "anchor"], default="summary")
+    p.add_argument("--revert-comments", choices=["on", "off"], default="on",
+                   help="comment on each committed edit with a one-click revert suggestion (default on)")
     p.add_argument("--out", required=True)
     x = sub.add_parser("execute")
     x.add_argument("--plan", required=True)
