@@ -113,6 +113,11 @@ def fenced(text, info=""):
     return f"{fence}{info}\n{text}\n{fence}"
 
 
+def removal_suggestion():
+    """A suggested change with no lines: applying it deletes the commented line."""
+    return "```suggestion\n```"
+
+
 def plural(n, word):
     return f"{n} {word}{'' if n == 1 else 's'}"
 
@@ -347,7 +352,9 @@ def execute(plan_path, repo_dir=None):
                 c.update(start_line=a, start_side="RIGHT")
             comments.append({"x": x, "c": c})
         elif x["do"] == "commit-marker":
-            comments.append({"x": x, "c": {"path": x["path"], "line": x["newLine"], "side": "RIGHT", "body": x["text"]}})
+            body = x["text"] + "\n\n<sub>This line is a marker committed during review so this comment could be placed here. " \
+                               "Commit the suggestion below to remove it.</sub>\n\n" + removal_suggestion()
+            comments.append({"x": x, "c": {"path": x["path"], "line": x["newLine"], "side": "RIGHT", "body": body}})
         elif x["do"] == "commit-comment":
             short = commits[-1]["sha"][:7] if commits else ""
             body = f"Edited during review (committed in {short}). It was:\n\n" + fenced("\n".join(x["old"]), "markdown")

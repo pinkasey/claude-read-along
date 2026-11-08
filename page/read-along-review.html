@@ -465,7 +465,8 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
     }
     if ($("commentsChk").checked && u.comments) {
       u.comments.filter((c) => !isBot(c)).forEach((c) => {
-        const said = textOf(clean(marked.parse(commentBody(c))));
+        // Skip the review-marker explanation and its empty removal suggestion: they are for the screen.
+        const said = textOf(clean(marked.parse(commentBody(c).replace(/<sub>This line is a marker[\s\S]*?<\/sub>/, "").replace(/`{3,}suggestion\n`{3,}/g, ""))));
         const intro = (c.line ? "Comment from " : "Earlier comment from ") + (c.author || "someone") + ". ";
         splitSentences(intro + said).forEach((t, k) => out.push({ text: t, kind: "comment", id: c.id, first: k === 0 }));
       });
