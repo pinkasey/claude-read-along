@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("fs");
 const path = require("path");
 const { chromium } = require("playwright");
-const { open, closeBrowser, SAMPLE_LOCAL, wrappedPage } = require("./harness");
+const { open, closeBrowser, baseUrl, SAMPLE_LOCAL, wrappedPage } = require("./harness");
 
 after(closeBrowser);
 
@@ -112,7 +112,7 @@ test("in voice mode the page never takes focus from outside it", async () => {
   const context = await browser.newContext({ viewport: { width: 1500, height: 900 } });
   await context.addInitScript((doc) => { if (window.top !== window) localStorage.setItem("mdr:doc", JSON.stringify(doc)); }, SMALL);
   const page = await context.newPage();
-  await page.goto("file://" + path.join(dir, "outer.html")); await page.waitForTimeout(800);
+  await page.goto((await baseUrl()) + "outer.html"); await page.waitForTimeout(800);
   const frame = page.frame({ url: /page\.html/ });
   await frame.click("#cmdIn");
   await frame.click('.unit[data-i="1"]'); await page.waitForTimeout(200);
@@ -157,6 +157,7 @@ for (const vp of [{ width: 1280, height: 800, name: "desktop" }, { width: 390, h
     assert.equal(await t.page.getAttribute("#foldHeader", "aria-expanded"), "false");
     await t.page.click("#playBtn"); await t.page.waitForTimeout(100);
     assert.ok(await t.lastSpoken(), "playing works while folded");
+    await t.page.waitForTimeout(300);
     await t.page.reload(); await t.page.waitForTimeout(400);
     assert.deepEqual(await h(), folded, "remembered after reload");
     await t.page.click("#foldHeader"); await t.page.click("#foldPlayer"); await t.page.waitForTimeout(100);

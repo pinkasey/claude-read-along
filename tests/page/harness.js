@@ -3,6 +3,7 @@
 // "ask Claude". Each test describes the situation; the page runs unmodified.
 const { chromium } = require("playwright");
 const fs = require("fs");
+const http = require("http");
 const os = require("os");
 const path = require("path");
 
@@ -17,6 +18,8 @@ async function getBrowser() {
 async function closeBrowser() {
   if (browser) await browser.close();
   browser = null;
+  if (server) server.close();
+  server = null;
 }
 
 // The published page is wrapped in a document skeleton by claude.ai; do the same here.
@@ -28,6 +31,24 @@ function wrappedPage() {
   fs.writeFileSync(pageFile, '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>' +
     fs.readFileSync(path.join(ROOT, "page", "read-along-review.html"), "utf8") + "</body></html>");
   return pageFile;
+}
+
+// Served over http, as claude.ai serves the page over https: a file:// page's local storage is not
+// reliably kept across a reload in Chromium, which made "remembered after reload" tests flaky.
+let server = null, base = null;
+async function baseUrl() {
+  if (base) return base;
+  const dir = path.dirname(wrappedPage());
+  server = http.createServer((req, res) => {
+    const name = path.basename(decodeURIComponent(req.url.split("?")[0])) || "page.html";
+    const file = path.join(dir, name);
+    if (!fs.existsSync(file)) { res.statusCode = 404; return res.end(); }
+    res.setHeader("content-type", "text/html; charset=utf-8");
+    res.end(fs.readFileSync(file));
+  });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  base = `http://127.0.0.1:${server.address().port}/`;
+  return base;
 }
 
 // Runs in the page before its own script.
@@ -104,7 +125,7 @@ async function open(opts = {}) {
     db: opts.db || null, local: opts.local || null, owner: opts.owner, connector: opts.connector, permission: opts.permission,
     sample: opts.sample == null ? null : opts.sample, sampleDelay: opts.sampleDelay, writesRefused: opts.writesRefused,
   });
-  await page.goto("file://" + wrappedPage());
+  await page.goto((await baseUrl()) + "page.html");
   await page.waitForTimeout(opts.settle || 500);
   const q = (fn, arg) => page.evaluate(fn, arg);
   return {
@@ -144,4 +165,4 @@ function prFixture(extra = {}) {
 
 const SAMPLE_LOCAL = { title: "", path: "docs/rate-limiting.md", pr: "", markdown: SAMPLE };
 
-module.exports = { open, closeBrowser, prFixture, SAMPLE, SAMPLE_LOCAL, wrappedPage };
+module.exports = { open, closeBrowser, baseUrl, prFixture, SAMPLE, SAMPLE_LOCAL, wrappedPage };

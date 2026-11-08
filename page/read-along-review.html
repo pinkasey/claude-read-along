@@ -1,6 +1,6 @@
 <title>Read-Along Review</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="read-along-version" content="0.1.5">
+<meta name="read-along-version" content="0.1.6">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&family=Literata:opsz,wght@7..72,400;7..72,600;7..72,700&display=swap">
@@ -1058,7 +1058,7 @@ header.top.folded .fold svg { transform: rotate(180deg); }
   $("repeatBtn").addEventListener("click", repeat);
   $("noteBtn").addEventListener("click", () => openComposer("note"));
   // Folding the top and bottom panels; each is remembered in this browser.
-  function foldPanel(which, folded) {
+  function foldPanel(which, folded, save = true) {
     const el = which === "header" ? document.querySelector("header.top") : document.querySelector(".player");
     const btn = $(which === "header" ? "foldHeader" : "foldPlayer");
     const name = which === "header" ? "top" : "bottom";
@@ -1066,19 +1066,19 @@ header.top.folded .fold svg { transform: rotate(180deg); }
     btn.setAttribute("aria-expanded", String(!folded));
     btn.setAttribute("aria-label", (folded ? "Unfold" : "Fold") + " the " + name + " panel");
     btn.title = btn.getAttribute("aria-label");
-    ls.set("fold:" + which, folded);
+    if (save) ls.set("fold:" + which, folded); // only a click saves: starting up never overwrites the saved state
   }
   $("foldHeader").addEventListener("click", () => foldPanel("header", !document.querySelector("header.top").classList.contains("folded")));
   $("foldPlayer").addEventListener("click", () => foldPanel("player", !document.querySelector(".player").classList.contains("folded")));
-  foldPanel("header", ls.get("fold:header", false) === true);
-  foldPanel("player", ls.get("fold:player", false) === true);
-  function showSettings(on) {
+  foldPanel("header", ls.get("fold:header", false) === true, false);
+  foldPanel("player", ls.get("fold:player", false) === true, false);
+  function showSettings(on, save = true) {
     document.querySelector(".player").classList.toggle("show-settings", on);
     $("settingsBtn").setAttribute("aria-expanded", String(on));
-    ls.set("settingsOpen", on);
+    if (save) ls.set("settingsOpen", on);
   }
   $("settingsBtn").addEventListener("click", () => showSettings(!document.querySelector(".player").classList.contains("show-settings")));
-  showSettings(ls.get("settingsOpen", false) === true);
+  showSettings(ls.get("settingsOpen", false) === true, false);
   $("editBtn").addEventListener("click", () => openComposer("edit"));
   $("loadBtn").addEventListener("click", () => {
     pause();

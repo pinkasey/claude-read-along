@@ -22,6 +22,6 @@ The page tests load `marked` and `DOMPurify` from cdnjs, so they need network ac
 | --- | --- |
 | `tests/python/test_tools.py` | Unit tests for the scripts |
 | `tests/python/test_check_repo.py` | Tests for the repository checks |
-| `tests/page/harness.js` | Opens the page with the stand-ins; `prFixture()` is a pull request with two files and review comments |
+| `tests/page/harness.js` | Serves the page over a local http server (as claude.ai serves it over https; a `file://` page's local storage is not reliably kept across reloads) and opens it with the stand-ins; `prFixture()` is a pull request with two files and review comments |
 | `tests/page/*.test.js` | Page tests, one file per area (reading, voice and edits, pull requests, panels, security) |
 | `tools/ci/check_repo.py` | The repository checks |
