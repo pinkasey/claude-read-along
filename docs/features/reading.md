@@ -17,7 +17,7 @@ Horizontal rules, blank lines and link definitions are not sections.
 
 ### Front matter and comments
 
-GitHub hides front matter (it shows it as a small table) and `<!-- comments -->` (it does not show them at all). The page shows both, so the reviewer sees what the file really says (**In review**):
+GitHub hides front matter (it shows it as a small table) and `<!-- comments -->` (it does not show them at all). The page shows both, so the reviewer sees what the file really says (**Shipped**, [#11](https://github.com/pinkasey/claude-read-along/pull/11)):
 
 - Front matter is shown as it is written, in a dashed box labeled "Front matter". It is never read as a heading or paragraph.
 - A comment block is shown in a dashed box labeled "Comment", with the comment's text.
