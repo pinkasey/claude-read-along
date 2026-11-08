@@ -1,0 +1,1192 @@
+<title>Read-Along Review</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&family=Literata:opsz,wght@7..72,400;7..72,600;7..72,700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<style>
+/* Layout: one reading column with a line-number gutter, a review rail on wide screens, a player bar pinned to the bottom. */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --ink: #1b2130;
+  --muted: #5a6474;
+  --line: #dce1e9;
+  --accent: #2b55c9;
+  --accent-ink: #ffffff;
+  --mark-bg: #fff3a8;
+  --mark-edge: #e0b400;
+  --note: #b4480f;
+  --note-bg: #fdf0e7;
+  --edit: #17703a;
+  --edit-bg: #e8f5ec;
+  --code-bg: #eef1f6;
+  --sent-bg: #ffd84a;
+  --font-read: "Literata", Georgia, "Times New Roman", serif;
+  --font-ui: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", Consolas, "Courier New", monospace;
+  --player-h: 128px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11141a; --surface: #191d25; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2a303b;
+    --accent: #8ba8ff; --accent-ink: #0f1420; --mark-bg: #3a3413; --mark-edge: #f0c419;
+    --note: #f59a62; --note-bg: #2e2018; --edit: #6fd394; --edit-bg: #16281d; --code-bg: #20252f; --sent-bg: #6b5a12;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11141a; --surface: #191d25; --ink: #e5e8ee; --muted: #9ba4b3; --line: #2a303b;
+  --accent: #8ba8ff; --accent-ink: #0f1420; --mark-bg: #3a3413; --mark-edge: #f0c419;
+  --note: #f59a62; --note-bg: #2e2018; --edit: #6fd394; --edit-bg: #16281d; --code-bg: #20252f; --sent-bg: #6b5a12;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); font-size: 15px; line-height: 1.5; }
+button, select, textarea, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+/* Header */
+header.top { border-bottom: 1px solid var(--line); background: var(--surface); }
+header.top .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding-block: 12px; }
+.doc-id { flex: 1 1 260px; min-width: 0; }
+.doc-id h1 { margin: 0; font-size: 17px; font-weight: 700; text-wrap: balance; }
+.doc-id .meta { color: var(--muted); font-size: 13px; font-family: var(--font-mono); overflow-wrap: anywhere; }
+.pending { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.chip { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 10px; font-size: 13px; font-weight: 700; border: 1px solid transparent; }
+.chip.note { color: var(--note); background: var(--note-bg); }
+.chip.edit { color: var(--edit); background: var(--edit-bg); }
+.chip.mode { color: var(--muted); border-color: var(--line); font-weight: 400; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 12px; min-height: 36px; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+.btn.ghost { border-color: transparent; background: transparent; }
+.btn.small { min-height: 30px; padding: 3px 10px; font-size: 13px; }
+.notice { font-size: 13px; color: var(--muted); padding-block: 6px; }
+
+/* Main grid */
+main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28px; padding-block: 20px calc(var(--player-h) + 32px); }
+@media (max-width: 999px) { main .wrap { grid-template-columns: minmax(0, 1fr); } .rail { display: none; } .rail.open { display: block; } }
+
+/* Document */
+.doc { min-width: 0; font-family: var(--font-read); font-size: 18px; line-height: 1.65; }
+.unit { position: relative; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 6px; border-radius: 8px; padding: 4px 8px 4px 0; cursor: pointer; border-left: 4px solid transparent; transition: background-color .15s; }
+.unit:hover { background: color-mix(in srgb, var(--mark-bg) 35%, transparent); }
+.unit.active { background: var(--mark-bg); border-left-color: var(--mark-edge); }
+.gutter { font-family: var(--font-mono); font-size: 12px; color: var(--muted); text-align: right; padding-top: .45em; user-select: none; font-variant-numeric: tabular-nums; }
+.body { min-width: 0; max-width: 70ch; }
+.body > :first-child { margin-top: 0; }
+.body > :last-child { margin-bottom: 0; }
+.body h1, .body h2, .body h3, .body h4 { font-family: var(--font-read); line-height: 1.25; text-wrap: balance; margin: .2em 0; }
+.body h1 { font-size: 30px; } .body h2 { font-size: 24px; } .body h3 { font-size: 20px; } .body h4 { font-size: 18px; }
+.unit.t-heading { margin-top: 14px; }
+.body p { margin: .1em 0; }
+.body code { font-family: var(--font-mono); font-size: .85em; background: var(--code-bg); border-radius: 4px; padding: 1px 5px; }
+.body pre { background: var(--code-bg); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-size: 14px; line-height: 1.5; margin: .2em 0; }
+.body pre code { background: none; padding: 0; font-size: inherit; }
+.body blockquote { margin: .2em 0; padding: 2px 14px; border-left: 3px solid var(--line); color: var(--muted); font-style: italic; }
+.body a { color: var(--accent); }
+.table-scroll { overflow-x: auto; }
+.body table { border-collapse: collapse; font-family: var(--font-ui); font-size: 15px; font-variant-numeric: tabular-nums; }
+.body th, .body td { border: 1px solid var(--line); padding: 6px 12px; text-align: left; }
+.body th { background: var(--code-bg); }
+.li { display: flex; gap: 10px; }
+.li .marker { flex: none; min-width: 1.3em; color: var(--muted); font-family: var(--font-ui); font-variant-numeric: tabular-nums; }
+.li .li-body { min-width: 0; }
+.li .li-body > p { margin: 0; }
+.edited-flag { display: inline-block; margin-left: 6px; font-family: var(--font-ui); font-size: 12px; font-weight: 700; color: var(--edit); background: var(--edit-bg); border-radius: 999px; padding: 0 8px; vertical-align: middle; }
+
+.inline-notes { grid-column: 2; display: flex; flex-direction: column; gap: 6px; margin-top: 6px; font-family: var(--font-ui); font-size: 14px; }
+.inline-note { background: var(--note-bg); color: var(--ink); border-radius: 8px; padding: 6px 10px; border-left: 3px solid var(--note); }
+.inline-note b { color: var(--note); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; margin-right: 6px; }
+
+.composer { grid-column: 2; margin-top: 8px; display: flex; flex-direction: column; gap: 8px; font-family: var(--font-ui); cursor: default; }
+.composer label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.composer textarea { width: 100%; min-height: 90px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--surface); font-size: 15px; resize: vertical; }
+.composer textarea.mono { font-family: var(--font-mono); font-size: 14px; }
+.composer .row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Empty state */
+.empty { background: var(--surface); border: 1px dashed var(--line); border-radius: 12px; padding: 24px; font-family: var(--font-ui); display: flex; flex-direction: column; gap: 12px; }
+.empty h2 { margin: 0; font-size: 20px; }
+.empty p { margin: 0; color: var(--muted); max-width: 60ch; }
+.empty textarea { width: 100%; min-height: 140px; border: 1px solid var(--line); border-radius: 8px; padding: 8px; font-family: var(--font-mono); font-size: 13px; background: var(--bg); }
+.empty .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* Review rail */
+.rail { min-width: 0; }
+.rail-inner { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); display: flex; flex-direction: column; gap: 12px; max-height: calc(100vh - var(--player-h) - 48px); overflow: auto; }
+.rail h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0; }
+.rail .hint { font-size: 13px; color: var(--muted); margin: 0; }
+.item { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.item .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.item .kind { font-weight: 700; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+.item.note .kind { color: var(--note); } .item.edit .kind { color: var(--edit); }
+.item .line { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.item .quote { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.item del { color: var(--muted); }
+.item ins { text-decoration: none; color: var(--edit); }
+.item .row { display: flex; gap: 6px; }
+.rail-toggle { display: none; }
+@media (max-width: 999px) { .rail-toggle { display: inline-flex; } }
+
+/* Player */
+.player { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surface); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom, 0px); z-index: 20; box-shadow: 0 -6px 24px rgba(0,0,0,.06); }
+.player .wrap { display: flex; flex-direction: column; gap: 8px; padding-block: 10px; }
+.now { display: flex; align-items: baseline; gap: 10px; min-width: 0; font-size: 14px; }
+.now .where { font-family: var(--font-mono); font-size: 12px; color: var(--muted); flex: none; }
+.now .what { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.progress { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.progress > div { height: 100%; width: 0; background: var(--mark-edge); transition: width .2s; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.transport, .actions, .settings { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.icon-btn { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); display: inline-grid; place-items: center; }
+.icon-btn svg { width: 20px; height: 20px; fill: currentColor; }
+.icon-btn.play { width: 52px; height: 52px; background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.icon-btn.play svg { width: 24px; height: 24px; }
+.settings select { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 4px 6px; min-height: 36px; max-width: 170px; }
+.settings label { display: inline-flex; gap: 4px; align-items: center; font-size: 13px; color: var(--muted); }
+.toggle { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
+.kbd { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+@media (max-width: 640px) { .kbd { display: none; } .settings select { max-width: 130px; } .unit { grid-template-columns: 30px minmax(0, 1fr); } .doc { font-size: 17px; } }
+
+/* Voice command box */
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.cmd-row { display: flex; gap: 8px; align-items: center; }
+.cmd-row .mic { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: var(--muted); border: 1px solid var(--line); cursor: pointer; }
+.cmd-row .mic svg { width: 18px; height: 18px; fill: currentColor; }
+.cmd-row.live .mic { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+#cmdIn { flex: 1 1 auto; min-width: 0; min-height: 40px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; background: var(--bg); font-size: 15px; }
+.cmd-row.live #cmdIn { border-color: var(--accent); background: var(--surface); }
+.cmd-feedback { font-size: 13px; color: var(--muted); min-height: 1.2em; overflow-wrap: anywhere; }
+.cmd-feedback.ok { color: var(--edit); }
+.cmd-feedback.warn { color: var(--note); }
+.cmd-help { font-size: 13px; display: flex; flex-direction: column; gap: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+.cmd-help b { display: inline-block; min-width: 72px; text-transform: uppercase; letter-spacing: .06em; font-size: 11px; color: var(--muted); }
+.cmd-help .cmd-tip { color: var(--muted); }
+.composer .proposal-hint { font-size: 13px; color: var(--accent); font-weight: 700; }
+/* Pull request context */
+.file-pick { margin-top: 6px; max-width: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 4px 8px; font-family: var(--font-mono); font-size: 13px; }
+.doc-id .meta a { color: var(--accent); }
+.unit.changed .gutter { color: var(--edit); font-weight: 500; }
+.unit.changed .gutter { background: linear-gradient(to left, var(--edit) 0 3px, transparent 3px); padding-right: 8px; }
+.unit.dim { opacity: .45; }
+.unit.dim.active { opacity: 1; }
+.file-banner { font-family: var(--font-ui); font-size: 14px; color: var(--edit); background: var(--edit-bg); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; }
+.gh-comments { grid-column: 2; display: flex; flex-direction: column; gap: 6px; margin-top: 6px; font-family: var(--font-ui); font-size: 14px; }
+.gh-comment { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 10px; transition: border-color .15s, box-shadow .15s; }
+.gh-comment.speaking { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent); }
+.gh-comment.bot, .gh-comment.outdated { opacity: .7; }
+.gh-head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; font-size: 13px; }
+.gh-head a { margin-left: auto; color: var(--accent); font-size: 12px; }
+.gh-head .tag { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 6px; }
+.gh-body > :first-child { margin-top: 2px; } .gh-body > :last-child { margin-bottom: 0; }
+.gh-body p { margin: .2em 0; }
+::highlight(mdr-sentence) { background-color: var(--sent-bg); color: var(--ink); }
+.outline { display: flex; flex-direction: column; gap: 1px; }
+.ol-item { display: flex; align-items: center; gap: 8px; text-align: left; border: 0; background: transparent; border-radius: 6px; padding: 5px 8px; font-size: 14px; color: var(--ink); min-height: 32px; }
+.ol-item:hover { background: var(--surface); }
+.ol-item.here { background: var(--surface); font-weight: 700; box-shadow: inset 3px 0 0 var(--mark-edge); }
+.ol-item .dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--edit); }
+.ol-item .dot.none { background: transparent; }
+.ol-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.ol-c { flex: none; font-size: 11px; font-weight: 700; color: var(--accent); border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--player-h) + 12px); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 14px; z-index: 30; max-width: calc(100vw - 32px); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="doc-id">
+      <h1 id="docTitle">Read-Along Review</h1>
+      <div class="meta" id="docMeta">Loading…</div>
+      <label class="sr" for="filePick">File</label>
+      <select id="filePick" class="file-pick" hidden></select>
+    </div>
+    <div class="pending">
+      <span class="chip note" id="chipNotes">0 notes</span>
+      <span class="chip edit" id="chipEdits">0 edits</span>
+      <span class="chip mode" id="chipMode" title="Where notes and edits are kept">Connecting…</span>
+      <button class="btn small rail-toggle" id="railToggle" aria-expanded="false" aria-controls="rail">Review list</button>
+      <button class="btn small" id="loadBtn">Load file</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <article class="doc" id="doc" aria-live="off"></article>
+    <aside class="rail" id="rail" aria-label="Review notes and edits">
+      <div class="rail-inner" id="railInner"></div>
+    </aside>
+  </div>
+</main>
+
+<div class="player" role="region" aria-label="Reader controls">
+  <div class="wrap">
+    <div class="now"><span class="where" id="nowWhere">—</span><span class="what" id="nowWhat">Press play or click any section to start reading.</span></div>
+    <div class="progress" aria-hidden="true"><div id="progressBar"></div></div>
+    <div class="cmd-row" id="cmdRow">
+      <label for="cmdIn" class="mic" title="Voice commands"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11z"/></svg><span class="sr">Voice command</span></label>
+      <input id="cmdIn" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" placeholder="Click here, press Win+H, then speak a command">
+      <button class="btn small" id="cmdHelpBtn" aria-expanded="false" aria-controls="cmdHelp">Commands</button>
+    </div>
+    <div class="cmd-feedback" id="cmdFeedback" aria-live="polite"></div>
+    <div class="cmd-help" id="cmdHelp" hidden>
+      <div><b>Reading</b> play · pause / stop · next · back · repeat · faster · slower</div>
+      <div><b>Moving</b> next chapter · previous chapter · start of chapter · go to line 40 · from the top</div>
+      <div><b>Pull request</b> next change · previous change · next comment · next file · previous file</div>
+      <div><b>Notes</b> add note <i>your text</i> · undo</div>
+      <div><b>Edits</b> change <i>2,000</i> to <i>3,000</i> · edit <i>make this shorter</i> · then accept or cancel</div>
+      <div class="cmd-tip">A command runs when you pause speaking, or press Enter. Notes and edits apply to the section that was being read when you started speaking. Use headphones so the microphone doesn't hear the reader.</div>
+    </div>
+    <div class="controls">
+      <div class="transport">
+        <button class="icon-btn" id="prevBtn" title="Previous section (←)" aria-label="Previous section"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+        <button class="icon-btn play" id="playBtn" title="Play / pause (Space)" aria-label="Play"><svg viewBox="0 0 24 24" id="playIcon"><path d="M7 4v16l13-8z"/></svg></button>
+        <button class="icon-btn" id="nextBtn" title="Next section (→)" aria-label="Next section"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+        <button class="icon-btn" id="repeatBtn" title="Repeat section (R)" aria-label="Repeat section"><svg viewBox="0 0 24 24"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z"/></svg></button>
+      </div>
+      <div class="actions">
+        <button class="btn" id="noteBtn">Note <span class="kbd">N</span></button>
+        <button class="btn" id="editBtn">Edit <span class="kbd">E</span></button>
+      </div>
+      <div class="settings">
+        <label for="rateSel">Speed <select id="rateSel">
+          <option value="0.8">0.8×</option><option value="1" selected>1×</option><option value="1.15">1.15×</option>
+          <option value="1.3">1.3×</option><option value="1.5">1.5×</option><option value="1.75">1.75×</option><option value="2">2×</option><option value="2.5">2.5×</option><option value="3">3×</option>
+        </select></label>
+        <label for="voiceSel">Voice <select id="voiceSel"><option value="">Default</option></select></label>
+        <label class="toggle" title="Keep going to the next section automatically"><input type="checkbox" id="autoChk" checked> Continuous</label>
+        <label class="toggle" id="changedLbl" title="Read only the sections this pull request changed" hidden><input type="checkbox" id="changedChk"> Changed only</label>
+        <label class="toggle" id="announceLbl" title="Say “changed” before sections the pull request changed" hidden><input type="checkbox" id="announceChk" checked> Say “changed”</label>
+        <label class="toggle" id="commentsLbl" title="Read existing review comments after their section" hidden><input type="checkbox" id="commentsChk" checked> Read comments</label>
+        <label class="toggle" title="Read code blocks line by line instead of only announcing them"><input type="checkbox" id="codeChk"> Read code</label>
+        <label class="toggle" title="Stop the screen from sleeping while reading"><input type="checkbox" id="wakeChk" checked> Screen on</label>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+  "use strict";
+  // ---------- small helpers ----------
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const clean = (html) => (window.DOMPurify ? DOMPurify.sanitize(html) : esc(html));
+  const ls = {
+    get(k, d) { try { const v = localStorage.getItem("mdr:" + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem("mdr:" + k, JSON.stringify(v)); } catch {} },
+  };
+  let toastTimer;
+  function toast(msg) {
+    const t = $("toast"); t.textContent = msg; t.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 2600);
+  }
+  const textOf = (html) => { const d = document.createElement("div"); d.innerHTML = html; return (d.textContent || "").replace(/\s+/g, " ").trim(); };
+
+  // ---------- state ----------
+  const S = {
+    meta: null,           // docs/current: a single document {title, path, markdown}, or {title, pr, files:[...]}
+    files: {},            // files/<id> when the document set has several files (a pull request)
+    fileId: null,         // the file shown now
+    doc: null,            // the file being read: {title, path, pr, prUrl, markdown, added, comments, status, scope}
+    units: [],
+    allNotes: [], allEdits: [],
+    notes: [],            // notes of the file being read
+    edits: {},            // key -> edit, of the file being read
+    cur: 0,               // active unit index
+    sentence: 0,
+    playing: false,
+    composer: null,       // {kind:'note'|'edit', key}
+    mode: "connecting",   // 'shared' | 'local'
+    db: null,
+  };
+
+  // ---------- markdown -> reading units ----------
+  function lineAt(src, idx) { if (idx < 0) return 0; let n = 1; for (let i = 0; i < idx && i < src.length; i++) if (src.charCodeAt(i) === 10) n++; return n; }
+  function locate(src, raw, from) {
+    let i = src.indexOf(raw, from);
+    if (i >= 0) return i;
+    const first = (raw.split("\n").find((l) => l.trim()) || "").trim();
+    if (first) { i = src.indexOf(first, from); if (i >= 0) return i; }
+    return from;
+  }
+  function tableSpeech(tok) {
+    const head = tok.header.map((c) => c.text);
+    const rows = tok.rows.map((r, ri) => "Row " + (ri + 1) + ". " + r.map((c, ci) => (head[ci] ? head[ci] + ", " : "") + c.text).join(". ") + ".");
+    return "Table with " + tok.rows.length + " rows. " + rows.join(" ");
+  }
+  function buildUnits(md) {
+    const units = [];
+    let tokens;
+    try { tokens = marked.lexer(md); } catch (e) { return [{ key: "L1", line: 1, type: "paragraph", depth: 0, html: "<p>" + esc(md) + "</p>", speech: md, own: md }]; }
+    let pos = 0;
+    const push = (u) => { u.key = "L" + u.line + (units.some((x) => x.key === "L" + u.line) ? "-" + units.length : ""); units.push(u); };
+
+    function addList(list, depth, from) {
+      let cursor = from;
+      list.items.forEach((item, idx) => {
+        const at = locate(md, item.raw, cursor);
+        cursor = at + 1;
+        const ownTokens = item.tokens.filter((t) => t.type !== "list");
+        const own = ownTokens.map((t) => t.raw).join("").trim();
+        const marker = item.task ? (item.checked ? "☑" : "☐") : list.ordered ? ((list.start === "" ? 1 : Number(list.start) || 1) + idx) + "." : "•";
+        const html = clean(marked.parser(ownTokens));
+        let speech = textOf(html);
+        if (item.task) speech = (item.checked ? "Done: " : "To do: ") + speech;
+        const l0 = lineAt(md, at);
+        push({ line: l0, endLine: l0 + (own.match(/\n/g) || []).length, type: "item", depth, marker, html, speech, own });
+        item.tokens.filter((t) => t.type === "list").forEach((sub) => { addList(sub, depth + 1, at); });
+      });
+    }
+
+    for (const tok of tokens) {
+      const start = pos; pos += tok.raw.length;
+      if (tok.type === "space" || tok.type === "hr" || tok.type === "def") continue;
+      const line = lineAt(md, start + (tok.raw.length - tok.raw.replace(/^\n+/, "").length));
+      if (tok.type === "list") { addList(tok, 0, start); continue; }
+      const html = clean(marked.parser([tok]));
+      let speech = textOf(html);
+      let type = tok.type;
+      const endLine = line + (tok.raw.trim().match(/\n/g) || []).length;
+      if (type === "code") {
+        const n = tok.text.split("\n").length;
+        speech = "Code block" + (tok.lang ? " in " + tok.lang : "") + ", " + n + " line" + (n === 1 ? "" : "s") + ".";
+        push({ line, endLine, type, depth: 0, html, speech, codeText: tok.text, own: tok.raw.trim() });
+        continue;
+      }
+      if (type === "table") speech = tableSpeech(tok);
+      if (type === "blockquote") speech = "Quote. " + speech;
+      push({ line, endLine, type, depth: tok.depth || 0, html, speech, own: tok.raw.trim() });
+    }
+    return units;
+  }
+
+  // ---------- pull request context: changed lines and existing review comments ----------
+  const isBot = (c) => c.isBot || /\[bot\]$/i.test(c.author || "");
+  function annotateUnits() {
+    const d = S.doc || {};
+    const added = Array.isArray(d.added) ? d.added : null;
+    const allNew = d.status === "added";
+    S.hasChanges = !!(added && added.length) && !allNew;
+    S.units.forEach((u, i) => {
+      const end = Math.max(u.endLine || u.line, (S.units[i + 1] ? S.units[i + 1].line - 1 : u.endLine || u.line));
+      u.changed = allNew || !!(added && added.some((r) => r[0] <= (u.endLine || u.line) && r[1] >= u.line));
+      u.span = [u.line, end];
+      u.comments = [];
+    });
+    const comments = Array.isArray(d.comments) ? d.comments.slice().sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt))) : [];
+    comments.forEach((c) => {
+      const ln = c.line || c.originalLine; if (!ln) return;
+      let best = null; S.units.forEach((u) => { if (u.line <= ln) best = u; });
+      (best || S.units[0]) && (best || S.units[0]).comments.push(c);
+    });
+    // A heading counts as changed context when its chapter has changes.
+    S.units.forEach((u, i) => {
+      if (u.type !== "heading") return;
+      for (let j = i + 1; j < S.units.length && !(S.units[j].type === "heading" && S.units[j].depth <= u.depth); j++) if (S.units[j].changed) { u.chapterChanged = true; break; }
+    });
+  }
+  const changedOnly = () => S.hasChanges && $("changedChk").checked;
+  const readable = (i) => !changedOnly() || S.units[i].changed || (S.units[i].type === "heading" && S.units[i].chapterChanged);
+  function nextReadable(i, dir) { for (let j = i + dir; j >= 0 && j < S.units.length; j += dir) if (readable(j)) return j; return -1; }
+
+  function splitSentences(text) {
+    if (!text) return [];
+    const parts = text.match(/[^.!?]+(?:[.!?]+["')\]]*|$)\s*/g) || [text];
+    const out = [];
+    for (let p of parts) {
+      p = p.trim(); if (!p) continue;
+      while (p.length > 220) { // short chunks avoid Chrome's long-utterance cutoff
+        let cut = p.lastIndexOf(", ", 200); if (cut < 80) cut = p.lastIndexOf(" ", 200); if (cut < 40) cut = 200;
+        out.push(p.slice(0, cut + 1).trim()); p = p.slice(cut + 1).trim();
+      }
+      if (p) out.push(p);
+    }
+    return out;
+  }
+  // What to say for a section, as chunks: {text, kind}. 'body' chunks are highlighted word-for-word on screen.
+  function sentencesOf(u) {
+    const out = [];
+    const i = S.units.indexOf(u);
+    if (S.hasChanges && !changedOnly() && u.changed && !(i > 0 && S.units[i - 1].changed) && $("announceChk").checked) out.push({ text: "Changed.", kind: "prefix" });
+    const edit = S.edits[u.key];
+    if (u.type === "code" && $("codeChk").checked && !edit) {
+      out.push({ text: u.speech, kind: "prefix" });
+      u.codeText.split("\n").map((l) => l.trim()).filter(Boolean).forEach((l) => out.push({ text: l, kind: "code" }));
+    } else {
+      const text = edit ? textOf(clean(marked.parse(edit.text))) : u.speech;
+      const plain = u.type === "paragraph" || u.type === "heading" || u.type === "item" || u.type === "blockquote";
+      splitSentences(text).forEach((t) => out.push({ text: t, kind: plain ? "body" : "other" }));
+    }
+    if ($("commentsChk").checked && u.comments) {
+      u.comments.filter((c) => !isBot(c)).forEach((c) => {
+        const said = textOf(clean(marked.parse(String(c.body || ""))));
+        const intro = (c.line ? "Comment from " : "Earlier comment from ") + (c.author || "someone") + ". ";
+        splitSentences(intro + said).forEach((t, k) => out.push({ text: t, kind: "comment", id: c.id, first: k === 0 }));
+      });
+    }
+    return out;
+  }
+
+  // ---------- sentence highlight (CSS Custom Highlight API; falls back to section highlight only) ----------
+  const hlOK = !!(window.CSS && CSS.highlights && window.Highlight);
+  let hlCursor = 0;
+  function clearSentence() { if (hlOK) CSS.highlights.delete("mdr-sentence"); document.querySelectorAll(".gh-comment.speaking").forEach((e) => e.classList.remove("speaking")); }
+  function showChunk(c) {
+    clearSentence();
+    if (c.kind === "comment") { const el = document.querySelector('.gh-comment[data-cid="' + CSS.escape(String(c.id)) + '"]'); if (el) el.classList.add("speaking"); return; }
+    if (!hlOK || c.kind !== "body") return;
+    const body = document.querySelector('.unit[data-i="' + S.cur + '"] .body');
+    if (!body) return;
+    // Build the section's visible text with whitespace collapsed, remembering where each character lives.
+    const map = []; let str = "";
+    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (n.parentElement.closest(".marker, .edited-flag") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT) });
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const t = n.nodeValue;
+      for (let k = 0; k < t.length; k++) {
+        const ch = /\s/.test(t[k]) ? " " : t[k];
+        if (ch === " " && (str === "" || str[str.length - 1] === " ")) continue;
+        str += ch; map.push([n, k]);
+      }
+    }
+    const needle = c.text.replace(/\s+/g, " ").trim();
+    let at = str.indexOf(needle, hlCursor); if (at < 0) at = str.indexOf(needle);
+    if (at < 0 || !needle) return;
+    hlCursor = at + needle.length;
+    const a = map[at], b = map[at + needle.length - 1];
+    const r = document.createRange(); r.setStart(a[0], a[1]); r.setEnd(b[0], b[1] + 1);
+    CSS.highlights.set("mdr-sentence", new Highlight(r));
+  }
+
+  // ---------- rendering ----------
+  function unitLabel(u) {
+    const ed = S.edits[u.key];
+    const t = ed ? textOf(clean(marked.parse(ed.text))) : (textOf(u.html) || u.speech);
+    return t.length > 90 ? t.slice(0, 88) + "…" : t;
+  }
+  function renderUnitBody(u) {
+    const edit = S.edits[u.key];
+    let inner;
+    if (edit) {
+      const h = u.type === "item" ? clean(marked.parseInline(edit.text)) : clean(marked.parse(edit.text));
+      inner = h + '<span class="edited-flag">edited</span>';
+    } else inner = u.html;
+    if (u.type === "table") inner = '<div class="table-scroll">' + inner + "</div>";
+    if (u.type === "item") return '<div class="li" style="padding-left:' + (u.depth * 1.6) + 'em"><span class="marker">' + esc(u.marker) + '</span><div class="li-body">' + inner + "</div></div>";
+    return inner;
+  }
+  function render() {
+    const doc = $("doc");
+    if (!S.doc || !S.doc.markdown) {
+      if (S.doc && S.doc.loading) $("doc").innerHTML = '<div class="empty"><h2>Loading the file…</h2></div>'; else renderEmpty();
+      renderRail(); renderHeader(); return;
+    }
+    const notesBy = {};
+    S.notes.forEach((n) => (notesBy[n.key] = notesBy[n.key] || []).push(n));
+    const html = S.units.map((u, i) => {
+      const notes = (notesBy[u.key] || []).map((n) => '<div class="inline-note"><b>Note</b>' + esc(n.text) + "</div>").join("");
+      let comp = "";
+      if (S.composer && S.composer.key === u.key) comp = composerHtml(u);
+      const gh = (u.comments || []).map((c) =>
+        '<div class="gh-comment' + (isBot(c) ? " bot" : "") + (c.line ? "" : " outdated") + '" data-cid="' + esc(c.id) + '">' +
+        '<div class="gh-head"><b>' + esc(c.author || "someone") + "</b>" + (isBot(c) ? '<span class="tag">bot · not read aloud</span>' : "") + (c.line ? "" : '<span class="tag">outdated</span>') +
+        (c.url ? '<a href="' + esc(c.url) + '" target="_blank" rel="noopener">on GitHub</a>' : "") + "</div>" +
+        '<div class="gh-body">' + clean(marked.parse(String(c.body || ""))) + "</div></div>").join("");
+      const cls = "unit t-" + u.type + (i === S.cur ? " active" : "") + (u.changed && S.hasChanges ? " changed" : "") + (changedOnly() && !readable(i) ? " dim" : "");
+      return '<div class="' + cls + '" data-i="' + i + '" tabindex="-1">' +
+        '<div class="gutter">' + u.line + "</div><div class=\"body\">" + renderUnitBody(u) + "</div>" +
+        (gh ? '<div class="gh-comments">' + gh + "</div>" : "") +
+        (notes ? '<div class="inline-notes">' + notes + "</div>" : "") + comp + "</div>";
+    }).join("");
+    doc.innerHTML = (S.doc.status === "added" ? '<div class="file-banner">New file in this pull request. Every section is new.</div>' : "") + html;
+    renderRail(); renderHeader(); renderNow();
+    if (S.composer && !S.composer.voice) { const ta = doc.querySelector(".composer textarea"); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }
+    else if (voiceMode) refocusCmd();
+  }
+  function composerHtml(u) {
+    if (S.composer.kind === "note") {
+      return '<div class="composer" data-stop="1"><label for="composerText">Review note on line ' + u.line + '</label>' +
+        '<textarea id="composerText" placeholder="What should change here?"></textarea>' +
+        '<div class="row"><button class="btn primary" data-act="save-note">Save note</button><button class="btn" data-act="cancel">Cancel</button></div></div>';
+    }
+    const cur = S.composer.proposed != null ? S.composer.proposed : S.edits[u.key] ? S.edits[u.key].text : u.own;
+    return '<div class="composer" data-stop="1"><label for="composerText">Edit markdown, line ' + u.line + '</label>' +
+      (S.composer.proposed != null ? '<div class="proposal-hint">Proposed from your voice command. Say “accept” or “cancel”, or adjust it here.</div>' : "") +
+      '<textarea id="composerText" class="mono">' + esc(cur) + "</textarea>" +
+      '<div class="row"><button class="btn primary" data-act="save-edit">Save edit</button><button class="btn" data-act="cancel">Cancel</button>' +
+      (S.edits[u.key] ? '<button class="btn" data-act="revert-edit">Undo edit</button>' : "") + "</div></div>";
+  }
+  function renderEmpty() {
+    $("doc").innerHTML = '<div class="empty"><h2>No document loaded</h2>' +
+      "<p>Ask Claude in the chat to load a markdown file from a pull request, or open or paste one here.</p>" +
+      '<div class="row"><input type="file" id="fileIn" accept=".md,.markdown,.txt,text/markdown,text/plain"></div>' +
+      '<textarea id="pasteIn" placeholder="…or paste markdown here"></textarea>' +
+      '<div class="row"><button class="btn primary" id="pasteBtn">Load pasted text</button></div></div>';
+    $("fileIn").addEventListener("change", onFile);
+    $("pasteBtn").addEventListener("click", () => { const v = $("pasteIn").value; if (v.trim()) saveDoc({ title: firstHeading(v) || "Pasted document", path: "", pr: "", markdown: v }); });
+  }
+  function renderHeader() {
+    const d = S.doc;
+    $("docTitle").textContent = d ? d.title || firstHeading(d.markdown || "") || "Untitled document" : "Read-Along Review";
+    const meta = [];
+    if (d && d.pr) meta.push(d.prUrl ? '<a href="' + esc(d.prUrl) + '" target="_blank" rel="noopener">' + esc(d.pr) + "</a>" : esc(d.pr));
+    if (d && d.path) meta.push(esc(d.path));
+    if (d && S.units.length) meta.push(S.units.length + " sections");
+    if (d && S.hasChanges) meta.push(S.units.filter((u) => u.changed).length + " changed");
+    const nc = S.units.reduce((a, u) => a + (u.comments || []).filter((c) => !isBot(c)).length, 0);
+    if (nc) meta.push(nc + (nc === 1 ? " comment" : " comments"));
+    $("docMeta").innerHTML = meta.join(" · ") || (S.mode === "connecting" ? "Loading…" : "No document");
+    // File picker for pull requests with several markdown files.
+    const files = S.meta && Array.isArray(S.meta.files) ? S.meta.files : [];
+    const pick = $("filePick");
+    pick.hidden = files.length < 2;
+    if (files.length > 1) {
+      pick.innerHTML = files.map((f) => '<option value="' + esc(f.id) + '"' + (f.id === S.fileId ? " selected" : "") + ">" + esc(f.path) +
+        (f.status === "added" ? " (new)" : f.changed ? " (" + f.changed + " changed)" : "") + (f.comments ? " · " + f.comments + " comments" : "") + "</option>").join("");
+    }
+    $("changedLbl").hidden = !S.hasChanges;
+    $("announceLbl").hidden = !S.hasChanges;
+    $("commentsLbl").hidden = !nc;
+    $("chipNotes").textContent = S.notes.length + (S.notes.length === 1 ? " note" : " notes");
+    const ne = Object.keys(S.edits).length;
+    $("chipEdits").textContent = ne + (ne === 1 ? " edit" : " edits");
+    $("chipMode").textContent = S.mode === "shared" ? "Saved for Claude · not posted" : S.mode === "local" ? "Saved in this browser only" : "Connecting…";
+  }
+  function renderRail() {
+    const items = [];
+    const heads = S.units.map((u, i) => ({ u, i })).filter((x) => x.u.type === "heading");
+    if (heads.length > 1) {
+      const minD = Math.min.apply(null, heads.map((x) => x.u.depth || 1));
+      items.push('<h2>Outline</h2><nav class="outline" aria-label="Outline">');
+      heads.forEach((x, k) => {
+        const endI = heads[k + 1] ? heads[k + 1].i : S.units.length;
+        let cc = 0; for (let j = x.i; j < endI; j++) cc += (S.units[j].comments || []).filter((c) => !isBot(c)).length;
+        items.push('<button class="ol-item" data-ol="' + x.i + '" style="padding-left:' + (((x.u.depth || 1) - minD) * 14 + 8) + 'px">' +
+          (S.hasChanges && x.u.chapterChanged ? '<span class="dot" title="Has changes"></span>' : '<span class="dot none"></span>') +
+          '<span class="ol-text">' + esc(textOf(x.u.html)) + "</span>" + (cc ? '<span class="ol-c" title="Review comments">' + cc + "</span>" : "") + "</button>");
+      });
+      items.push("</nav>");
+    }
+    const byLine = S.notes.map((n) => ({ kind: "note", line: n.line, n }))
+      .concat(Object.values(S.edits).map((e) => ({ kind: "edit", line: e.line, e })))
+      .sort((a, b) => a.line - b.line);
+    items.push("<h2>Review, not yet posted</h2>");
+    if (!byLine.length) items.push('<p class="hint">Notes and edits you make appear here. They stay with this page until you ask Claude to post them to the pull request.</p>');
+    byLine.forEach((x) => {
+      if (x.kind === "note") {
+        items.push('<div class="item note"><div class="head"><span class="kind">Note</span><span class="line">line ' + x.line + "</span></div>" +
+          "<div>" + esc(x.n.text) + '</div><div class="quote">' + esc(x.n.anchor || "") + "</div>" +
+          '<div class="row"><button class="btn small" data-jump="' + esc(x.n.key) + '">Go to</button><button class="btn small ghost" data-del-note="' + esc(x.n.id) + '">Delete</button></div></div>');
+      } else {
+        items.push('<div class="item edit"><div class="head"><span class="kind">Edit</span><span class="line">line ' + x.line + "</span></div>" +
+          "<div><del>" + esc(x.e.original) + "</del></div><div><ins>" + esc(x.e.text) + "</ins></div>" +
+          '<div class="row"><button class="btn small" data-jump="' + esc(x.e.key) + '">Go to</button><button class="btn small ghost" data-del-edit="' + esc(x.e.key) + '">Undo edit</button></div></div>');
+      }
+    });
+    items.push('<p class="hint">When you are ready, tell Claude in the chat: “post my review”.</p>');
+    $("railInner").innerHTML = items.join("");
+    markOutline();
+  }
+  function renderNow() {
+    const u = S.units[S.cur];
+    $("nowWhere").textContent = u ? "line " + u.line + " · " + (S.cur + 1) + "/" + S.units.length : "—";
+    $("nowWhat").textContent = u ? unitLabel(u) : "Press play or click any section to start reading.";
+    $("progressBar").style.width = S.units.length ? ((S.cur + 1) / S.units.length * 100) + "%" : "0";
+    $("playBtn").setAttribute("aria-label", S.playing ? "Pause" : "Play");
+    $("playIcon").innerHTML = S.playing ? '<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>' : '<path d="M7 4v16l13-8z"/>';
+  }
+  function setActive(i, scroll) {
+    S.cur = Math.max(0, Math.min(S.units.length - 1, i));
+    document.querySelectorAll(".unit.active").forEach((el) => el.classList.remove("active"));
+    const el = document.querySelector('.unit[data-i="' + S.cur + '"]');
+    if (el) {
+      el.classList.add("active");
+      if (scroll) {
+        const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        el.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+      }
+    }
+    renderNow();
+    markOutline();
+    reportPosition();
+  }
+  function markOutline() {
+    let h = -1; S.units.forEach((u, i) => { if (u.type === "heading" && i <= S.cur) h = i; });
+    document.querySelectorAll(".ol-item").forEach((b) => b.classList.toggle("here", Number(b.dataset.ol) === h));
+  }
+  const firstHeading = (md) => { const m = /^#{1,6}\s+(.+)$/m.exec(md); return m ? m[1].trim() : ""; };
+
+  // ---------- speech ----------
+  const synth = window.speechSynthesis;
+  let gen = 0;
+  let voices = [];
+  function loadVoices() {
+    if (!synth) return;
+    voices = synth.getVoices();
+    const sel = $("voiceSel"), saved = ls.get("voice", "");
+    const lang = (navigator.language || "en").slice(0, 2);
+    const sorted = voices.slice().sort((a, b) => (b.lang.startsWith(lang) - a.lang.startsWith(lang)) || a.name.localeCompare(b.name));
+    sel.innerHTML = '<option value="">Default</option>' + sorted.map((v) => '<option value="' + esc(v.name) + '"' + (v.name === saved ? " selected" : "") + ">" + esc(v.name.replace(/^Microsoft\s+/, "")) + " (" + esc(v.lang) + ")</option>").join("");
+  }
+  function speakFrom(i, sentence) {
+    if (!synth) { toast("This browser cannot read aloud."); return; }
+    if (!S.units.length) return;
+    const my = ++gen;
+    S.playing = true; S.sentence = sentence || 0;
+    setActive(i, true);
+    requestWake();
+    const go = () => speakSentence(my);
+    if (synth.speaking || synth.pending) { synth.cancel(); setTimeout(go, 80); } else go();
+  }
+  function speakSentence(my) {
+    if (my !== gen || !S.playing) return;
+    const u = S.units[S.cur];
+    const parts = sentencesOf(u);
+    if (S.sentence >= parts.length) return finishUnit(my);
+    if (S.sentence === 0) hlCursor = 0;
+    const chunk = parts[S.sentence];
+    showChunk(chunk);
+    const ut = new SpeechSynthesisUtterance(chunk.text);
+    const v = voices.find((x) => x.name === $("voiceSel").value);
+    if (v) { ut.voice = v; ut.lang = v.lang; }
+    ut.rate = Number($("rateSel").value) || 1;
+    ut.onend = () => { if (my !== gen) return; S.sentence++; speakSentence(my); };
+    ut.onerror = (e) => { if (my !== gen) return; if (e.error === "interrupted" || e.error === "canceled") return; S.sentence++; speakSentence(my); };
+    synth.speak(ut);
+  }
+  function finishUnit(my) {
+    if (my !== gen) return;
+    clearSentence();
+    const n = nextReadable(S.cur, 1);
+    if ($("autoChk").checked && n >= 0) {
+      setTimeout(() => { if (my !== gen || !S.playing) return; S.sentence = 0; setActive(n, true); speakSentence(my); }, S.units[S.cur].type === "heading" ? 450 : 250);
+    } else {
+      S.playing = false; S.sentence = 0; renderNow(); releaseWake();
+      if (n < 0) toast(changedOnly() ? "No more changes in this file" : "End of document");
+    }
+  }
+  function pause() { gen++; S.playing = false; if (synth) synth.cancel(); clearSentence(); renderNow(); releaseWake(); }
+  function toggle() { if (S.playing) pause(); else speakFrom(S.cur, S.sentence); }
+  function next() { const n = nextReadable(S.cur, 1); const i = n < 0 ? S.cur : n; S.playing ? speakFrom(i, 0) : (S.sentence = 0, setActive(i, true)); }
+  function prev() { const n = nextReadable(S.cur, -1); const i = n < 0 ? S.cur : n; S.playing ? speakFrom(i, 0) : (S.sentence = 0, setActive(i, true)); }
+  function repeat() { speakFrom(S.cur, 0); }
+
+  // ---------- wake lock ----------
+  let wake = null;
+  async function requestWake() {
+    if (!$("wakeChk").checked || wake || !("wakeLock" in navigator)) return;
+    try { wake = await navigator.wakeLock.request("screen"); wake.addEventListener("release", () => (wake = null)); } catch { wake = null; }
+  }
+  function releaseWake() { if (wake) { wake.release().catch(() => {}); wake = null; } }
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.playing) requestWake(); });
+
+  // ---------- storage: shared db with a local fallback ----------
+  // Notes and edits carry a "scope" naming the pull request and file they belong to, so several files never mix.
+  const safeId = (s) => String(s).replace(/[^A-Za-z0-9_\-.~:@+]/g, "_").slice(-150);
+  const local = {
+    load() { S.meta = ls.get("doc", null); S.allNotes = ls.get("notes", []); S.allEdits = Object.values(ls.get("edits", {})); },
+    persist() { ls.set("doc", S.meta); ls.set("notes", S.allNotes); const m = {}; S.allEdits.forEach((e) => (m[e.id || e.key] = e)); ls.set("edits", m); },
+  };
+  function composeDoc() {
+    const m = S.meta;
+    if (!m) { S.doc = null; return; }
+    if (!Array.isArray(m.files)) { S.doc = Object.assign({ scope: "" }, m, { pr: typeof m.pr === "string" ? m.pr : "" }); S.fileId = null; return; }
+    const ids = m.files.map((f) => f.id);
+    const remembered = ls.get("file:" + (m.loadId || ""), null);
+    if (!ids.includes(S.fileId)) S.fileId = ids.includes(remembered) ? remembered : (m.defaultFile && ids.includes(m.defaultFile) ? m.defaultFile : ids[0]);
+    const f = S.files[S.fileId];
+    const pr = m.pr || null;
+    if (!f) { S.doc = { title: m.title, path: "", pr: pr ? pr.repo + " #" + pr.number : "", prUrl: pr && pr.url, markdown: "", loading: true, scope: "" }; return; }
+    S.doc = {
+      title: m.title, path: f.path, markdown: f.markdown || "", status: f.status, added: f.added || null, comments: f.comments || [],
+      pr: pr ? pr.repo + " #" + pr.number : "", prUrl: pr && pr.url,
+      scope: (pr ? pr.repo + "#" + pr.number : "docs") + ":" + f.path,
+    };
+  }
+  function applyScope() {
+    const sc = S.doc ? S.doc.scope || "" : "";
+    S.notes = S.allNotes.filter((n) => (n.scope || "") === sc);
+    S.edits = {}; S.allEdits.forEach((e) => { if ((e.scope || "") === sc) S.edits[e.key] = e; });
+  }
+  const editId = (key) => (S.doc && S.doc.scope ? safeId(S.doc.scope) + "~" : "") + key;
+  async function saveDoc(d) {
+    d.loadedAt = new Date().toISOString();
+    if (S.mode === "shared") {
+      try { await S.db.doc("docs/current").set(d); toast("Document loaded"); } catch (e) { toast("Could not save the document: " + (e.message || e.code)); }
+    } else { S.meta = d; S.allNotes = []; S.allEdits = []; local.persist(); setDoc(); toast("Document loaded"); }
+  }
+  async function saveNote(u, text) {
+    const n = { key: u.key, line: u.line, anchor: unitLabel(u), text, createdAt: new Date().toISOString(), scope: S.doc.scope || "", file: S.doc.path || "", changed: !!u.changed };
+    if (S.mode === "shared") {
+      try { const ref = await S.db.collection("notes").add(n); n.id = ref.id; } catch (e) { toast("Note not saved: " + (e.message || e.code)); return null; }
+    } else { n.id = "n" + Date.now(); S.allNotes.push(n); local.persist(); applyScope(); render(); }
+    toast("Note saved");
+    return n.id;
+  }
+  async function deleteNote(id) {
+    if (S.mode === "shared") { try { await S.db.doc("notes/" + id).delete(); } catch (e) { toast("Could not delete: " + (e.message || e.code)); } }
+    else { S.allNotes = S.allNotes.filter((n) => n.id !== id); local.persist(); applyScope(); render(); }
+  }
+  async function saveEdit(u, text) {
+    const id = editId(u.key);
+    const e = { id, key: u.key, line: u.line, endLine: u.endLine || u.line, original: u.own, text, updatedAt: new Date().toISOString(), scope: S.doc.scope || "", file: S.doc.path || "", changed: !!u.changed };
+    if (S.mode === "shared") { try { await S.db.doc("edits/" + id).set(e); } catch (err) { toast("Edit not saved: " + (err.message || err.code)); return false; } }
+    else { S.allEdits = S.allEdits.filter((x) => x.id !== id && !(x.key === u.key && (x.scope || "") === e.scope)); S.allEdits.push(e); local.persist(); applyScope(); render(); }
+    toast("Edit saved");
+    return true;
+  }
+  async function deleteEdit(key) {
+    const e = S.edits[key]; const id = (e && e.id) || editId(key);
+    if (S.mode === "shared") { try { await S.db.doc("edits/" + id).delete(); } catch (err) { toast("Could not undo: " + (err.message || err.code)); } }
+    else { S.allEdits = S.allEdits.filter((x) => (x.id || x.key) !== id); local.persist(); applyScope(); render(); }
+  }
+  // Position is shared so Claude knows what "this section" means when you talk to it in the chat.
+  let posTimer = null, posWriting = false, posPending = null;
+  function reportPosition() {
+    if (S.mode !== "shared") return;
+    const u = S.units[S.cur]; if (!u) return;
+    posPending = { key: u.key, line: u.line, index: S.cur, text: unitLabel(u), file: S.doc.path || "", scope: S.doc.scope || "", at: new Date().toISOString() };
+    clearTimeout(posTimer);
+    posTimer = setTimeout(flushPosition, 1200);
+  }
+  async function flushPosition() {
+    if (posWriting || !posPending) return;
+    posWriting = true; const p = posPending; posPending = null;
+    try { await S.db.doc("state/position").set(p); } catch {}
+    posWriting = false;
+    if (posPending) flushPosition();
+  }
+
+  let lastMd = null;
+  function setDoc() {
+    composeDoc(); applyScope();
+    const md = S.doc && S.doc.markdown ? S.doc.markdown : "";
+    if (md !== lastMd) { S.units = md ? buildUnits(md) : []; lastMd = md; if (S.cur >= S.units.length) S.cur = 0; }
+    annotateUnits();
+    render();
+  }
+
+  // Commands sent from the chat (Claude writes control/remote).
+  let lastCmd = null;
+  function runRemote(c) {
+    if (!c || c.n === lastCmd) return;
+    const first = lastCmd === null; lastCmd = c.n;
+    if (first) return; // ignore whatever command was there before this page opened
+    const lineIdx = (line) => { let best = 0; S.units.forEach((u, i) => { if (u.line <= line) best = i; }); return best; };
+    switch (c.action) {
+      case "play": speakFrom(S.cur, S.sentence); break;
+      case "pause": case "stop": pause(); break;
+      case "next": next(); break;
+      case "back": case "previous": prev(); break;
+      case "repeat": repeat(); break;
+      case "goto": { const i = typeof c.line === "number" ? lineIdx(c.line) : Number(c.index) || 0; S.playing ? speakFrom(i, 0) : setActive(i, true); break; }
+    }
+    if (c.action) toast("From chat: " + c.action);
+  }
+
+  async function connect() {
+    let db = null;
+    try { db = window.claude && window.claude.use ? await window.claude.use("db") : null; } catch { db = null; }
+    if (!db) { S.mode = "local"; local.load(); setDoc(); return; }
+    S.mode = "shared";
+    S.db = db; S.mode = "shared";
+    let loaded = false;
+    const slow = setTimeout(() => { if (!loaded) $("docMeta").textContent = "Still waiting for saved data… it may be out of date."; }, 10000);
+    db.doc("docs/current").onSnapshot((snap) => {
+      if (!snap.metadata.fromCache) { loaded = true; clearTimeout(slow); }
+      const before = S.doc && S.doc.markdown;
+      S.meta = snap.exists ? snap.data() : null;
+      composeDoc();
+      if (!S.doc || S.doc.markdown !== before) { pause(); S.cur = 0; }
+      setDoc();
+    }, (e) => { loaded = true; clearTimeout(slow); toast("Saved data is unavailable (" + e.code + ")."); });
+    db.collection("files").onSnapshot((snap) => {
+      const m = {}; snap.docs.forEach((d) => (m[d.id] = d.data()));
+      S.files = m;
+      const before = S.doc && S.doc.markdown;
+      composeDoc();
+      if (S.doc && S.doc.markdown !== before) { pause(); S.cur = 0; }
+      setDoc();
+    }, () => {});
+    db.collection("notes").orderBy("line").onSnapshot((snap) => {
+      S.allNotes = snap.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+      applyScope(); if (S.doc) render(); else renderHeader();
+    }, () => {});
+    db.collection("edits").onSnapshot((snap) => {
+      S.allEdits = snap.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+      applyScope(); if (S.doc) render(); else renderHeader();
+    }, () => {});
+    db.doc("control/remote").onSnapshot((snap) => { runRemote(snap.exists ? snap.data() : { n: 0 }); }, () => {});
+    renderHeader();
+  }
+
+  // ---------- events ----------
+  function onFile(e) {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = () => saveDoc({ title: firstHeading(String(r.result)) || f.name, path: f.name, pr: "", markdown: String(r.result) });
+    r.readAsText(f);
+  }
+  $("doc").addEventListener("click", (e) => {
+    const act = e.target.closest("[data-act]");
+    if (act) {
+      const u = S.units.find((x) => S.composer && x.key === S.composer.key);
+      const ta = $("composerText");
+      const val = ta ? ta.value.trim() : "";
+      if (proposal && (act.dataset.act === "cancel" || act.dataset.act === "save-edit")) { act.dataset.act === "cancel" ? cancelProposal() : acceptProposal(); return; }
+      if (act.dataset.act === "cancel") { S.composer = null; render(); }
+      else if (act.dataset.act === "save-note" && u) { if (!val) return; S.composer = null; render(); saveNote(u, val); }
+      else if (act.dataset.act === "save-edit" && u) { S.composer = null; render(); if (val && val !== u.own.trim()) saveEdit(u, val); else if (S.edits[u.key]) deleteEdit(u.key); }
+      else if (act.dataset.act === "revert-edit" && u) { S.composer = null; render(); deleteEdit(u.key); }
+      return;
+    }
+    if (e.target.closest("[data-stop]") || e.target.closest("a")) return;
+    const el = e.target.closest(".unit"); if (!el) return;
+    const i = Number(el.dataset.i);
+    speakFrom(i, 0); // clicking a section reads it, and keeps going if Continuous is on
+  });
+  $("railInner").addEventListener("click", (e) => {
+    const ol = e.target.closest("[data-ol]");
+    if (ol) { goTo(Number(ol.dataset.ol)); $("rail").classList.remove("open"); return; }
+    const j = e.target.closest("[data-jump]");
+    if (j) { const i = S.units.findIndex((u) => u.key === j.dataset.jump); if (i >= 0) { S.playing ? speakFrom(i, 0) : setActive(i, true); } $("rail").classList.remove("open"); return; }
+    const dn = e.target.closest("[data-del-note]"); if (dn) return deleteNote(dn.dataset.delNote);
+    const de = e.target.closest("[data-del-edit]"); if (de) return deleteEdit(de.dataset.delEdit);
+  });
+  function openComposer(kind) {
+    const u = S.units[S.cur]; if (!u) return;
+    pause();
+    S.composer = { kind, key: u.key }; render();
+    const el = document.querySelector('.unit[data-i="' + S.cur + '"]'); if (el) el.scrollIntoView({ block: "center" });
+  }
+  $("playBtn").addEventListener("click", toggle);
+  $("nextBtn").addEventListener("click", next);
+  $("prevBtn").addEventListener("click", prev);
+  $("repeatBtn").addEventListener("click", repeat);
+  $("noteBtn").addEventListener("click", () => openComposer("note"));
+  $("editBtn").addEventListener("click", () => openComposer("edit"));
+  $("loadBtn").addEventListener("click", () => {
+    pause();
+    renderEmpty();
+    const back = document.createElement("button"); back.className = "btn"; back.textContent = "Cancel";
+    back.addEventListener("click", () => render());
+    if (S.doc) $("doc").querySelector(".row:last-child").appendChild(back);
+  });
+  $("railToggle").addEventListener("click", () => {
+    const r = $("rail"); const open = r.classList.toggle("open");
+    $("railToggle").setAttribute("aria-expanded", String(open));
+    if (open) r.scrollIntoView({ block: "start" });
+  });
+  $("rateSel").addEventListener("change", () => { ls.set("rate", $("rateSel").value); if (S.playing) speakFrom(S.cur, S.sentence); });
+  $("voiceSel").addEventListener("change", () => { ls.set("voice", $("voiceSel").value); if (S.playing) speakFrom(S.cur, S.sentence); });
+  ["autoChk", "codeChk", "wakeChk", "changedChk", "announceChk", "commentsChk"].forEach((id) => {
+    const saved = ls.get(id, null); if (saved !== null) $(id).checked = saved;
+    $(id).addEventListener("change", () => {
+      ls.set(id, $(id).checked);
+      if (id === "wakeChk" && !$(id).checked) releaseWake();
+      if (id === "changedChk") { render(); if ($(id).checked && !readable(S.cur)) { const n = nextReadable(S.cur, 1); if (n >= 0) goTo(n); } }
+    });
+  });
+  $("filePick").addEventListener("change", () => {
+    pause();
+    S.fileId = $("filePick").value; S.cur = 0;
+    if (S.meta && S.meta.loadId) ls.set("file:" + S.meta.loadId, S.fileId);
+    setDoc();
+  });
+  const savedRate = ls.get("rate", null); if (savedRate) $("rateSel").value = savedRate;
+  document.addEventListener("keydown", (e) => {
+    if (e.target.closest("textarea, input, select") || e.ctrlKey || e.metaKey || e.altKey) {
+      if (e.key === "Escape" && S.composer) { S.composer = null; render(); }
+      return;
+    }
+    const k = e.key;
+    if (k === " " || k === "k") { e.preventDefault(); toggle(); }
+    else if (k === "ArrowRight" || k === "j") { e.preventDefault(); next(); }
+    else if (k === "ArrowLeft" || k === "h") { e.preventDefault(); prev(); }
+    else if (k === "r") repeat();
+    else if (k === "n") { e.preventDefault(); openComposer("note"); }
+    else if (k === "e") { e.preventDefault(); openComposer("edit"); }
+  });
+
+  // ---------- voice commands (dictated into the command box by the OS) ----------
+  var voiceMode = false;
+  const cmdIn = $("cmdIn"), cmdFb = $("cmdFeedback");
+  const isTouch = window.matchMedia("(pointer: coarse)").matches;
+  const isWindows = /Windows/i.test(navigator.userAgent);
+  cmdIn.placeholder = isTouch ? "Tap here, then use your keyboard's microphone" : isWindows ? "Click here, press Win+H, then speak a command" : "Click here, start dictation, then speak a command";
+  let cmdStartIdx = null, cmdTimer = null;
+  const undoStack = [];
+  let sampleFn = null, samplePromise = null;
+
+  function feedback(msg, kind) { cmdFb.textContent = msg; cmdFb.className = "cmd-feedback" + (kind ? " " + kind : ""); }
+  function refocusCmd() {
+    setTimeout(() => {
+      if (!voiceMode) return;
+      const a = document.activeElement;
+      if (a === cmdIn) return;
+      if (a && a.matches && a.matches("textarea, select, input[type=text], input[type=file]")) return; // you're typing or choosing somewhere else
+      cmdIn.focus({ preventScroll: true });
+    }, 120);
+  }
+  cmdIn.addEventListener("focus", () => { voiceMode = true; $("cmdRow").classList.add("live"); });
+  cmdIn.addEventListener("blur", () => { $("cmdRow").classList.remove("live"); refocusCmd(); });
+  // While voice mode is on, clicks on sections and buttons don't take the cursor out of the command box.
+  document.addEventListener("mousedown", (e) => {
+    if (!voiceMode) return;
+    if (e.target.closest("textarea, input, select, label, .composer")) return;
+    e.preventDefault();
+  }, true);
+  document.addEventListener("change", (e) => { if (voiceMode && e.target !== cmdIn) refocusCmd(); });
+
+  cmdIn.addEventListener("input", () => {
+    const v = cmdIn.value.trim();
+    if (!v) { cmdStartIdx = null; clearTimeout(cmdTimer); feedback(""); return; }
+    if (cmdStartIdx === null) cmdStartIdx = S.cur; // the section being read when you started speaking
+    const p = parseCommand(v);
+    clearTimeout(cmdTimer);
+    if (!p) { feedback("Listening…"); cmdTimer = setTimeout(() => runCommandText(), 2600); return; }
+    const long = p.action === "note" || p.action === "change" || p.action === "ask-edit";
+    if (long) feedback((p.action === "note" ? "Note" : "Edit") + " ready: “" + (p.text || p.instruction || p.from + " → " + p.to) + "”. Keep talking, or pause to save.");
+    cmdTimer = setTimeout(() => runCommandText(), long ? 3000 : 1100);
+  });
+  cmdIn.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); clearTimeout(cmdTimer); runCommandText(); }
+    else if (e.key === "Escape") { voiceMode = false; clearTimeout(cmdTimer); cmdIn.value = ""; feedback(""); cmdIn.blur(); }
+  });
+  $("cmdHelpBtn").addEventListener("click", () => {
+    const h = $("cmdHelp"); h.hidden = !h.hidden; $("cmdHelpBtn").setAttribute("aria-expanded", String(!h.hidden));
+  });
+
+  function norm(s) {
+    return s.toLowerCase().replace(/[“”"«»]/g, "").replace(/^[\s.,!?;:-]+|[\s.,!?;:]+$/g, "").replace(/^(please|ok|okay|hey|um|uh|so)\s+/, "").replace(/\s+(please)$/, "").trim();
+  }
+  function stripQuotes(s) { return s.trim().replace(/^["'“”‘’]+|["'“”‘’.,]+$/g, "").trim(); }
+  function cap(s) { s = s.trim(); return s ? s[0].toUpperCase() + s.slice(1) : s; }
+
+  function parseCommand(raw) {
+    const t = norm(raw);
+    if (!t) return null;
+    const one = (re) => re.test(t);
+    if (one(/^(accept|yes|save( it)?|keep( it)?|confirm|apply( it)?|looks good)$/)) return { action: "accept" };
+    if (one(/^(cancel|no|discard|reject|never ?mind|forget it)$/)) return { action: "cancel" };
+    if (one(/^(play|continue|resume|start|read|go on|keep going|carry on)$/)) return { action: "play" };
+    if (one(/^(pause|stop|wait|hold on|hold|quiet|shush|be quiet)$/)) return { action: "pause" };
+    if (one(/^(next|skip|next section|next one|skip this|forward|skip section)$/)) return { action: "next" };
+    if (one(/^(back|previous|go back|previous section|last one|back one)$/)) return { action: "back" };
+    if (one(/^(repeat|again|say (that|it) again|read (that|it) again|repeat (that|this|section))$/)) return { action: "repeat" };
+    if (one(/^(next chapter|skip (to (the )?)?next chapter|skip chapter|next heading|next part)$/)) return { action: "next-chapter" };
+    if (one(/^(previous chapter|last chapter|chapter back|previous heading|back a chapter)$/)) return { action: "prev-chapter" };
+    if (one(/^(start of (the )?chapter|restart (the )?chapter|(go )?back to (the )?(start of (the )?)?chapter|beginning of (the )?chapter)$/)) return { action: "chapter-start" };
+    if (one(/^(next change|next changed( section)?|skip to (the )?next change)$/)) return { action: "next-change" };
+    if (one(/^(previous change|last change|previous changed( section)?)$/)) return { action: "prev-change" };
+    if (one(/^(next comment|skip to (the )?next comment)$/)) return { action: "next-comment" };
+    if (one(/^(next file|previous file)$/)) return { action: t.startsWith("next") ? "next-file" : "prev-file" };
+    if (one(/^(from the top|start over|from the beginning|go to (the )?(top|start|beginning))$/)) return { action: "top" };
+    if (one(/^(faster|speed up|read faster)$/)) return { action: "faster" };
+    if (one(/^(slower|slow down|read slower)$/)) return { action: "slower" };
+    if (one(/^(undo|undo that|remove (that|the last one)|delete (that|the last note))$/)) return { action: "undo" };
+    if (one(/^(help|commands|show commands|what can i say)$/)) return { action: "help" };
+    if (one(/^(edit|edit this|edit (this|the) section|edit section)$/)) return { action: "edit-open" };
+    if (one(/^(note|add (a )?note|make (a )?note|comment|add (a )?comment)$/)) return { action: "note-open" };
+    let m = /^(?:go to|jump to|skip to)?\s*line\s+(\d+)$/.exec(t);
+    if (m) return { action: "line", line: Number(m[1]) };
+    // Keep the original wording for notes and edits.
+    const rawT = raw.trim().replace(/^[\s.,!?;:-]+/, "").replace(/^(please|ok|okay|hey)[\s,]+/i, "");
+    m = /^(?:add (?:a )?note|make (?:a )?note|note|add (?:a )?comment|comment|review note)\b[\s,:.\-]*(.+)$/i.exec(rawT);
+    if (m && stripQuotes(m[1])) return { action: "note", text: cap(m[1].trim().replace(/\s+/g, " ")) };
+    m = /^(?:edit\s*(?:this|the section)?\s*[,:.\-]?\s*)?(?:change|replace)\s+(.+?)\s+(?:to|with|into)\s+(.+)$/i.exec(rawT);
+    if (m && stripQuotes(m[1]) && stripQuotes(m[2])) return { action: "change", from: stripQuotes(m[1]), to: stripQuotes(m[2]), instruction: rawT };
+    m = /^(?:edit|rewrite|fix)\b(?:\s+(?:this|the section|this section))?[\s,:.\-]*(.+)$/i.exec(rawT);
+    if (m && stripQuotes(m[1])) return { action: "ask-edit", instruction: m[1].trim() };
+    return null;
+  }
+
+  // Index where the changed run holding i begins (i itself when i is not in a changed run).
+  function chapterOfRun(i) { let k = i; while (k > 0 && S.units[k].changed && S.units[k - 1].changed) k--; return k; }
+  function headingIdx() { return S.units.map((u, i) => (u.type === "heading" ? i : -1)).filter((i) => i >= 0); }
+  function chapterStart(i) { let h = 0; headingIdx().forEach((x) => { if (x <= i) h = x; }); return h; }
+  function goTo(i) { i = Math.max(0, Math.min(S.units.length - 1, i)); S.playing ? speakFrom(i, 0) : (S.sentence = 0, setActive(i, true)); }
+  function stepRate(dir) {
+    const sel = $("rateSel"), i = sel.selectedIndex + dir;
+    if (i < 0 || i >= sel.options.length) return false;
+    sel.selectedIndex = i; ls.set("rate", sel.value); if (S.playing) speakFrom(S.cur, S.sentence); return true;
+  }
+
+  function literalChange(src, from, to) {
+    // Keep the document's number style: replacing "2,000" with a spoken "3000" writes "3,000".
+    const fit = (m) => (/\d,\d/.test(m) && /^\d{4,}$/.test(to) ? Number(to).toLocaleString("en-US") : to);
+    const tryRe = (re) => { const all = src.match(new RegExp(re.source, "gi")); if (!all || all.length !== 1) return null; return src.replace(new RegExp(re.source, "i"), fit); };
+    const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    let out = tryRe(new RegExp(escRe(from)));
+    if (out != null) return out;
+    // "2000" spoken may be "2,000" in the text, and the other way round.
+    const flex = escRe(from.replace(/,/g, "")).replace(/\d+/g, (d) => d.split("").join(",?"));
+    out = tryRe(new RegExp(flex));
+    return out;
+  }
+  async function getSample() {
+    if (sampleFn) return sampleFn;
+    if (!samplePromise) samplePromise = (window.claude && window.claude.use ? window.claude.use("sample") : Promise.resolve(null)).catch(() => null);
+    sampleFn = await samplePromise; return sampleFn;
+  }
+  async function askClaudeEdit(u, instruction) {
+    const sample = await getSample();
+    if (!sample) return { error: "Asking Claude isn't available here. Say “edit” to type the change yourself." };
+    const current = S.edits[u.key] ? S.edits[u.key].text : u.own;
+    const prompt = "You are editing one section of a markdown document that is under review.\n" +
+      "Apply the reviewer's instruction to the section. The instruction was dictated by voice, so ignore filler words and fix obvious speech-to-text mistakes.\n" +
+      "Change only what the instruction asks for, and keep the markdown syntax of the section (list markers, emphasis, links) the same.\n" +
+      "Reply with only the revised markdown of the section: no explanation, no quotes, no code fence around it.\n\n" +
+      "SECTION:\n" + current + "\n\nINSTRUCTION:\n" + instruction;
+    try {
+      const { text } = await sample(prompt, { modelTier: "quick" });
+      let out = String(text || "").trim().replace(/^```[a-z]*\n([\s\S]*?)\n```$/i, "$1").trim();
+      if (!out) return { error: "Claude returned nothing. Try saying it differently." };
+      return { text: out };
+    } catch (e) {
+      const why = e && e.code === "not_granted" ? "Asking Claude wasn't allowed. Say “edit” to type the change yourself." :
+        e && e.code === "rate_limited" ? "Too many requests just now. Wait a moment and try again." : "Claude couldn't make that edit (" + ((e && e.code) || "error") + ").";
+      return { error: why };
+    }
+  }
+
+  let proposal = null; // {key, idx, text, resume}
+  function sayRaw(text, after) {
+    if (!synth) { if (after) after(); return; }
+    const my = ++gen;
+    synth.cancel();
+    setTimeout(() => {
+      if (my !== gen) return;
+      const ut = new SpeechSynthesisUtterance(text);
+      const v = voices.find((x) => x.name === $("voiceSel").value); if (v) { ut.voice = v; ut.lang = v.lang; }
+      ut.rate = Number($("rateSel").value) || 1;
+      ut.onend = () => { if (my === gen && after) after(); };
+      synth.speak(ut);
+    }, 80);
+  }
+  function propose(idx, text) {
+    const u = S.units[idx];
+    const resume = S.playing;
+    pause();
+    proposal = { key: u.key, idx, text, resume };
+    S.cur = idx;
+    S.composer = { kind: "edit", key: u.key, proposed: text, voice: true };
+    render(); setActive(idx, true);
+    feedback("Proposed edit for line " + u.line + ". Say “accept” or “cancel”.", "ok");
+    sayRaw("Proposed change: " + textOf(clean(marked.parse(text))) + ". Say accept, or cancel.");
+  }
+  async function acceptProposal() {
+    if (!proposal) return false;
+    const p = proposal; proposal = null;
+    const ta = $("composerText");
+    const text = ta ? ta.value.trim() : p.text;
+    S.composer = null; render();
+    const u = S.units[p.idx];
+    const ok = await saveEdit(u, text);
+    if (ok) { undoStack.push({ type: "edit", key: u.key }); feedback("Edit saved on line " + u.line + ".", "ok"); }
+    if (p.resume) speakFrom(Math.min(p.idx + 1, S.units.length - 1), 0);
+    return true;
+  }
+  function cancelProposal() {
+    if (!proposal && !(S.composer && S.composer.voice)) return false;
+    const p = proposal; proposal = null; S.composer = null; render();
+    feedback("Edit discarded.");
+    if (p && p.resume) speakFrom(p.idx, 0);
+    return true;
+  }
+
+  async function runCommandText() {
+    clearTimeout(cmdTimer);
+    const raw = cmdIn.value.trim();
+    const target = cmdStartIdx === null ? S.cur : cmdStartIdx;
+    cmdIn.value = ""; cmdStartIdx = null;
+    if (!raw) return;
+    const p = parseCommand(raw);
+    if (!p) { feedback("Didn't recognise “" + raw + "”. Say “commands” to see what works.", "warn"); return; }
+    if (!S.units.length && !["help"].includes(p.action)) { feedback("Load a document first.", "warn"); return; }
+    const u = S.units[target];
+    switch (p.action) {
+      case "accept": if (!(await acceptProposal())) feedback("There's no proposed edit to accept.", "warn"); return;
+      case "cancel": if (!cancelProposal()) { pause(); feedback("Paused."); } return;
+      case "play": speakFrom(S.cur, S.sentence); break;
+      case "pause": pause(); break;
+      case "next": next(); break;
+      case "back": prev(); break;
+      case "repeat": repeat(); break;
+      case "next-chapter": { const h = headingIdx().find((x) => x > S.cur); if (h === undefined) { feedback("This is the last chapter.", "warn"); return; } goTo(h); break; }
+      case "prev-chapter": { const cs = chapterStart(S.cur); const hs = headingIdx().filter((x) => x < cs); goTo(hs.length ? hs[hs.length - 1] : 0); break; }
+      case "chapter-start": goTo(chapterStart(S.cur)); break;
+      case "next-change": case "prev-change": {
+        // The start of a run of changed sections, after (or before) the current one.
+        const starts = S.units.map((x, k) => (x.changed && !(k > 0 && S.units[k - 1].changed) ? k : -1)).filter((k) => k >= 0);
+        const j = p.action === "next-change" ? starts.find((k) => k > S.cur) : starts.filter((k) => k < chapterOfRun(S.cur)).pop();
+        if (j === undefined || !S.hasChanges) { feedback(S.hasChanges ? "No more changes that way." : "This document has no pull request changes.", "warn"); return; }
+        goTo(j); break;
+      }
+      case "next-comment": {
+        const j = S.units.findIndex((x, k) => k > S.cur && (x.comments || []).some((c) => !isBot(c)));
+        if (j < 0) { feedback("No more review comments in this file.", "warn"); return; }
+        goTo(j); break;
+      }
+      case "next-file": case "prev-file": {
+        const fs = S.meta && Array.isArray(S.meta.files) ? S.meta.files : [];
+        const k = fs.findIndex((f) => f.id === S.fileId) + (p.action === "next-file" ? 1 : -1);
+        if (!fs[k]) { feedback("No other file that way.", "warn"); return; }
+        $("filePick").value = fs[k].id; $("filePick").dispatchEvent(new Event("change")); break;
+      }
+      case "top": goTo(0); break;
+      case "line": { let best = 0; S.units.forEach((x, i) => { if (x.line <= p.line) best = i; }); goTo(best); break; }
+      case "faster": if (!stepRate(1)) { feedback("Already at the fastest speed.", "warn"); return; } break;
+      case "slower": if (!stepRate(-1)) { feedback("Already at the slowest speed.", "warn"); return; } break;
+      case "help": $("cmdHelp").hidden = false; $("cmdHelpBtn").setAttribute("aria-expanded", "true"); break;
+      case "note-open": S.cur = target; setActive(target, false); openComposer("note"); feedback("Type the note, or say “add note” followed by the text."); return;
+      case "edit-open": S.cur = target; setActive(target, false); openComposer("edit"); feedback("Type the change, then Save edit."); return;
+      case "note": {
+        const id = await saveNote(u, p.text);
+        if (id) { undoStack.push({ type: "note", id }); feedback("Note added on line " + u.line + ": “" + p.text + "”", "ok"); }
+        return;
+      }
+      case "change": {
+        const current = S.edits[u.key] ? S.edits[u.key].text : u.own;
+        const out = literalChange(current, p.from, p.to);
+        if (out != null) { propose(target, out); return; }
+        feedback("Asking Claude to apply: “" + p.instruction + "”…");
+        const r = await askClaudeEdit(u, p.instruction);
+        r.error ? feedback(r.error, "warn") : propose(target, r.text);
+        return;
+      }
+      case "ask-edit": {
+        feedback("Asking Claude to apply: “" + p.instruction + "”…");
+        const r = await askClaudeEdit(u, p.instruction);
+        r.error ? feedback(r.error, "warn") : propose(target, r.text);
+        return;
+      }
+      case "undo": {
+        const last = undoStack.pop();
+        if (!last) { feedback("Nothing to undo.", "warn"); return; }
+        if (last.type === "note") await deleteNote(last.id); else await deleteEdit(last.key);
+        feedback("Removed the last " + last.type + ".", "ok");
+        return;
+      }
+    }
+    feedback("✓ " + p.action.replace("-", " "), "ok");
+  }
+
+  if (synth) { loadVoices(); synth.addEventListener ? synth.addEventListener("voiceschanged", loadVoices) : (synth.onvoiceschanged = loadVoices); }
+  window.addEventListener("pagehide", () => { if (synth) synth.cancel(); });
+  const playerEl = document.querySelector(".player");
+  const sizePlayer = () => document.documentElement.style.setProperty("--player-h", playerEl.offsetHeight + "px");
+  if (window.ResizeObserver) new ResizeObserver(sizePlayer).observe(playerEl); else window.addEventListener("resize", sizePlayer);
+  sizePlayer();
+  render();
+  connect();
+})();
+</script>
