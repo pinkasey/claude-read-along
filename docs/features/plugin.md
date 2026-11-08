@@ -1,6 +1,6 @@
 # The Claude Code plugin
 
-Status: **In review**
+Status: **Shipped**
 
 ## Installing
 
