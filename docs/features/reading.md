@@ -32,6 +32,7 @@ A section that has an edit is read as edited.
 
 - The section being read has a highlight and a marker on its left edge, and is scrolled to the middle of the screen.
 - Inside headings, paragraphs, list items and quotes, the sentence being spoken has a stronger highlight. Browsers without the CSS Custom Highlight API keep the section highlight only.
+- The header (title, pull request, file picker, counts and buttons) stays at the top while scrolling, so switching files is always one click away. On a phone it is compact: one line each for the title and the pull request, the file picker, and one row of counts and buttons that scrolls sideways.
 - The player bar shows the current line, the position (for example 7/42), the section's first words, and a progress bar.
 
 ## Navigation

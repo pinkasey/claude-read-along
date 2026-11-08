@@ -1,6 +1,6 @@
 <title>Read-Along Review</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="read-along-version" content="0.1.1">
+<meta name="read-along-version" content="0.1.2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&family=Literata:opsz,wght@7..72,400;7..72,600;7..72,700&display=swap">
@@ -28,6 +28,7 @@
   --font-ui: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", Consolas, "Courier New", monospace;
   --player-h: 128px;
+  --header-h: 64px;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -53,7 +54,22 @@ button { cursor: pointer; }
 .wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 
 /* Header */
-header.top { border-bottom: 1px solid var(--line); background: var(--surface); }
+/* The header stays in view, so the file picker and buttons are always one click away. */
+header.top { border-bottom: 1px solid var(--line); background: var(--surface); position: sticky; top: env(safe-area-inset-top, 0px); z-index: 15; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 16; background: var(--surface); }
+.unit { scroll-margin-top: calc(var(--header-h) + 8px); scroll-margin-bottom: calc(var(--player-h) + 8px); }
+@media (max-width: 640px) {
+  /* A sticky header must stay short on a phone: one line each for title and pull request, then one scrolling row. */
+  header.top .wrap { padding-block: 8px; gap: 6px; }
+  .doc-id { flex-basis: 100%; }
+  .doc-id h1 { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .doc-id .meta { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-pick { width: 100%; margin-top: 4px; }
+  header.top .pending { flex-wrap: nowrap; overflow-x: auto; width: 100%; scrollbar-width: none; }
+  header.top .pending::-webkit-scrollbar { display: none; }
+  header.top .pending > * { flex: none; }
+  #chipMode { display: none; }
+}
 header.top .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding-block: 12px; }
 .doc-id { flex: 1 1 260px; min-width: 0; }
 .doc-id h1 { margin: 0; font-size: 17px; font-weight: 700; text-wrap: balance; }
@@ -121,7 +137,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
 
 /* Review rail */
 .rail { min-width: 0; }
-.rail-inner { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); display: flex; flex-direction: column; gap: 12px; max-height: calc(100vh - var(--player-h) - 48px); overflow: auto; }
+.rail-inner { position: sticky; top: calc(env(safe-area-inset-top, 0px) + var(--header-h) + 16px); display: flex; flex-direction: column; gap: 12px; max-height: calc(100vh - var(--player-h) - var(--header-h) - 48px); overflow: auto; }
 .rail h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0; }
 .rail .hint { font-size: 13px; color: var(--muted); margin: 0; }
 .item { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
@@ -1563,6 +1579,10 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
   const sizePlayer = () => document.documentElement.style.setProperty("--player-h", playerEl.offsetHeight + "px");
   if (window.ResizeObserver) new ResizeObserver(sizePlayer).observe(playerEl); else window.addEventListener("resize", sizePlayer);
   sizePlayer();
+  const headerEl = document.querySelector("header.top");
+  const sizeHeader = () => document.documentElement.style.setProperty("--header-h", headerEl.offsetHeight + "px");
+  if (window.ResizeObserver) new ResizeObserver(sizeHeader).observe(headerEl); else window.addEventListener("resize", sizeHeader);
+  sizeHeader();
   render();
   connect();
 })();
