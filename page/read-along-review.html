@@ -805,7 +805,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
   function reportPosition() {
     if (S.mode !== "shared" || S.readOnly) return;
     const u = S.units[S.cur]; if (!u) return;
-    posPending = { key: u.key, line: u.line, index: S.cur, text: unitLabel(u), file: S.doc.path || "", scope: S.doc.scope || "", at: new Date().toISOString() };
+    posPending = { key: u.key, line: u.line, endLine: u.endLine || u.line, index: S.cur, text: unitLabel(u), file: S.doc.path || "", scope: S.doc.scope || "", at: new Date().toISOString() };
     clearTimeout(posTimer);
     posTimer = setTimeout(flushPosition, 1200);
   }
