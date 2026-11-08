@@ -38,6 +38,19 @@ class PageSafety(unittest.TestCase):
         self.assertTrue(any("integrity" in e for e in errors))
         self.assertTrue(any("crossorigin" in e for e in errors))
 
+    def test_duplicate_attributes_cannot_hide_the_real_one(self):
+        # A browser uses the first of a repeated attribute.
+        script = ('<script src="https://example.invalid/x.js" src="https://cdnjs.cloudflare.com/x.js" '
+                  'integrity="" integrity="sha512-AAAA" crossorigin="anonymous"></script>')
+        errors = check.check_page(page(script))
+        self.assertTrue(any("repeats attribute" in e for e in errors))
+        self.assertTrue(any("not allowed" in e and "example.invalid" in e for e in errors), errors)
+        self.assertTrue(any("integrity" in e and "repeats" not in e for e in errors), errors)
+        link = '<link rel="stylesheet" href="https://evil.example/x.css" href="https://fonts.googleapis.com/css2">'
+        errors = check.check_page(page(link))
+        self.assertTrue(any("repeats attribute" in e for e in errors))
+        self.assertTrue(any("evil.example" in e for e in errors), errors)
+
     def test_stylesheets_only_from_google_fonts(self):
         for tag in ("<link rel='stylesheet' href='https://evil.example/x.css'>", '<LINK REL="Stylesheet" HREF="https://evil.example/x.css">'):
             self.assertTrue(any("stylesheet" in e for e in check.check_page(page(tag))), tag)

@@ -31,7 +31,15 @@ class Tags(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         if tag in ("script", "link", "meta"):
-            self.tags.append((tag, {k.lower(): (v or "") for k, v in attrs}))
+            found, dupes = {}, []
+            for k, v in attrs:
+                k = k.lower()
+                if k in found:
+                    dupes.append(k)  # a browser uses the first value; a repeated one must not hide it
+                else:
+                    found[k] = v or ""
+            found["__duplicates__"] = dupes
+            self.tags.append((tag, found))
 
     handle_startendtag = handle_starttag
 
@@ -52,6 +60,8 @@ def page_version(html):
 def check_page(html):
     errors = []
     for tag, a in parse(html):
+        if tag in ("script", "link") and a["__duplicates__"]:
+            errors.append(f"<{tag}> repeats attribute(s) {', '.join(sorted(set(a['__duplicates__'])))}: write each once")
         if tag == "script" and "src" in a:
             src = a["src"].strip()
             if not src.startswith(SCRIPT_HOSTS):
