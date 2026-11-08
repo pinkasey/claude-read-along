@@ -1,6 +1,6 @@
 # Security and privacy
 
-Status: **In review**
+Status: **Shipped**
 
 Read-Along handles text written by other people (pull request markdown and review comments), and it can post and commit under the reviewer's GitHub account. These are the rules that keep that safe. A change that weakens one of them needs a reason in its pull request.
 

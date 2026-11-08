@@ -1,90 +1,113 @@
 # claude-read-along
 
-Code-review markdown files with Claude, by listening. A review page reads the document aloud section by section, highlights the sentence being spoken, and lets you jump, add comments and make edits, by clicking, by keyboard or by dictated voice commands. Comments and edits stay with the page until you ask Claude to post them to the pull request.
+Review markdown with Claude by listening. A review page reads the document aloud section by section, highlights the sentence being spoken, and lets you jump, add comments and make edits by clicking, by keyboard or by dictated voice commands. Your comments and edits stay on the page until you ask Claude to post them to the pull request, and Claude asks before committing anything.
 
-It works with a pull request (changed sections, existing review comments, several files) and with plain markdown files.
+It works with GitHub pull requests (changed sections, existing review comments, several files) and with plain markdown files.
 
-## What's here
-
-| Path | What it is |
-| --- | --- |
-| `page/read-along-review.html` | The review page, published by Claude as a private claude.ai page. Reading uses the browser's built-in speech. |
-| `tools/pr_loader.py` | Fetches a pull request's markdown files, changed lines and review comments with `gh`, and writes them as JSON documents for the page's database. Also loads plain local files. |
-| `tools/post_review.py` | Posts a review to its pull request in two steps: `plan` (changes nothing) and `execute`. |
-| `examples/sample-design-doc.md` | A sample design document to try it on. |
-| `docs/` | How Read-Along behaves: the product overview and one document per feature area. Start at [docs/README.md](docs/README.md). |
-
-## Getting to the page
-
-The review page is a private claude.ai page (an Artifact) that belongs to you. Claude publishes it the first time you ask for a review in Claude Code (web, desktop app or terminal), and it then stays at the same link. To open it again without asking Claude:
-
-- use the link Claude gave you,
-- find it in your artifacts at claude.ai/code/artifacts (in the terminal, `/artifacts`),
-- or pin it to your claude.ai sidebar (ask Claude to pin the review page).
-
-In the Claude Code app the page can sit in the side pane, next to the chat.
-
-## What works on the page alone, and what needs Claude
-
-| On the page alone | Needs a Claude Code session |
-| --- | --- |
-| Listening, navigation, voice commands | Loading a pull request (the page cannot reach GitHub) |
-| Comments and edits | Posting the review, and committing edits |
-| Opening or pasting a local markdown file | |
-| Edits proposed by voice ("edit make this shorter"), which ask Claude directly from the page | |
-
-The page's **Open pull request** and **Post review** buttons send the request to the Claude Code session that last loaded the page. If that session has ended, the panel shows the sentence to paste into a new session instead.
-
-## How a review goes
-
-1. Load a pull request: press **Open pull request** in the page, or tell Claude in the chat which pull request to review.
-2. Press play, or click any section.
-3. Add comments and make edits as you listen. Claude can read them back at any time.
-4. Press **Post review** in the page, or tell Claude "post my review". Claude shows what it will post and commit, and acts only after you confirm.
+> **Disclaimer.** You use this plugin at your own responsibility. When you confirm, it posts review comments and can push commits to GitHub under your account, so check what Claude shows you before confirming. It is provided as is, without warranty of any kind; see [LICENSE](LICENSE).
 
 ## Installation
 
-Packaging as a Claude Code plugin is the next step, and installation instructions come with it. Until then, the tool runs from a Claude Code session that has this repository: ask Claude to publish `page/read-along-review.html` as a private page and to load a pull request with `tools/pr_loader.py`.
+Read-Along is a Claude Code plugin. In a Claude Code terminal session:
 
-## Page features
+```text
+/plugin install read-along --marketplace pinkasey/claude-read-along
+```
 
-- Section-by-section reading with sentence highlighting and auto-scroll; click a section to read from there.
-- Outline of headings; chapters with pull-request changes are marked, with counts of review comments.
-- Pull requests: changed sections are marked and announced ("Changed."), a **Changed only** mode skips the rest, and existing review comments are read after their section (bot comments are shown but not read).
-- Review comments and edits per file; edits can be proposed by voice ("change 2,000 to 3,000", "edit make this shorter").
-- Voice commands, dictated with the operating system's own dictation (Win+H on Windows, the keyboard microphone on phones), typed into the command box: play, pause, next, back, repeat, faster, slower, next chapter, next change, next comment, next file, go to line N, add comment …, undo.
-- Speed 0.8× to 3×, voice choice, keep-screen-on.
+Or from a shell:
+
+```bash
+claude plugin install read-along --marketplace pinkasey/claude-read-along
+```
+
+Answer `y` to add the marketplace, then choose where to install it (your user scope makes it available everywhere). In the Claude desktop app, where `/plugin` does not run: click **+** next to the prompt box, then **Plugins**, **Add marketplace** with `pinkasey/claude-read-along`, then **Add plugin**.
+
+### Requirements
+
+- Claude Code signed in with a claude.ai account, so Claude can publish your review page as a private claude.ai page (an Artifact).
+- `python3` and the GitHub CLI `gh`, signed in to an account that can read the repository (and write to it, to commit edits). In Claude Code on the web, Claude attaches the repository to the session itself.
+- A browser with speech synthesis: current Edge, Chrome and Safari have it. Edge on Windows has the most natural voices.
+
+## Using it
+
+Start in Claude Code with `/read-along:review`, or just ask, for example:
+
+- "Review pinkasey/claude-read-along#1 with Read-Along"
+- "Read me docs/design.md"
+
+The first time, Claude publishes your review page and gives you its link. You keep that one page for every review.
+
+1. Open the page and press play, or click any section to read from there.
+2. Add comments (**Comment**, the C key, or say "add comment …") and edits (**Edit**, E, or say "change X to Y") as you listen.
+3. Say "post my review" in the chat, or press **Post review** on the page. Claude shows every comment and edit it will post, and asks before committing anything.
+
+To open the page again without asking Claude: use its link, find it in your artifacts at claude.ai/code/artifacts (`/artifacts` in the terminal), or ask Claude to pin it to your claude.ai sidebar. In the Claude Code app it can sit in the side pane, next to the chat.
+
+## Features
+
+- Section-by-section reading, with the sentence being spoken highlighted and kept in view; speed 0.8× to 3×, voice choice, keep the screen awake.
+- An outline of headings; chapters with pull request changes are marked, with counts of review comments.
+- Pull requests: changed sections are marked and announced ("Changed."), **Changed only** skips the rest, and existing review comments are read after their section (bots are shown, not read).
+- Your comments and edits, kept per file; edits can be proposed by voice ("change 2,000 to 3,000", "edit make this shorter").
+- Voice commands, dictated with your operating system's dictation (Win+H on Windows, the keyboard microphone on phones) into the command box: play, pause, next, back, repeat, faster, slower, next chapter, next change, next comment, next file, go to line N, add comment …, undo.
 
 ## Posting a review
 
-GitHub only accepts review comments on lines inside the pull request's diff. Two settings decide what happens, chosen in the page's **Post review** panel and saved per person:
+GitHub only accepts review comments on lines inside the pull request's diff. Three settings, in the page's **Post review** panel and saved per person, decide what happens:
 
 | Setting | Default | Alternative |
 | --- | --- | --- |
 | Edits on changed lines | Suggested changes the author applies with one click | Committed to the pull request branch |
-| Comments and edits on unchanged lines | Listed in the review summary with line numbers | Committed (a `<!-- review comment -->` marker for a comment, the edited text for an edit), with a review comment on it |
+| Comments and edits on unchanged lines | Listed in the review summary with line numbers | Committed (a `<!-- review comment -->` marker for a comment, the edited text for an edit), with a review comment on it; the marker comes with a one-click removal |
+| Add revert comments to committed edits | On: each committed edit gets a one-click revert | Off |
 
-Claude always asks before committing anything. Pull requests from forks cannot be committed to, so those items fall back to suggestions or the summary.
+Claude always asks before committing. Pull requests from forks cannot be committed to, so those items become suggestions or summary entries.
 
-```bash
-python3 tools/post_review.py plan --pr OWNER/REPO NUMBER --data EXPORT_DIR --edit-mode suggest --outside summary --out plan.json
-```
+## What works on the page alone
 
-```bash
-python3 tools/post_review.py execute --plan plan.json --out result.json --repo-dir path/to/clone
-```
+| On the page alone | Needs Claude |
+| --- | --- |
+| Listening, navigation, voice commands | Loading a pull request (the page cannot reach GitHub) |
+| Comments and edits | Posting the review, and committing edits |
+| Opening or pasting a local markdown file | |
+| Edits proposed by voice, which ask Claude directly from the page | |
 
-## Commands for the loader
+## Known limits
+
+- The page's **Open pull request** and **Post review** buttons are meant to send the request to your Claude Code session, but this does not work yet: claude.ai refuses the connector call. Each panel shows the sentence to paste into the chat instead, which works.
+- The page cannot use the microphone itself, so voice commands use your operating system's dictation into the command box.
+- Speech usually stops when a phone's screen locks; the page keeps the screen awake while reading.
+
+## What's in this repository
+
+| Path | What it is |
+| --- | --- |
+| `.claude-plugin/` | The plugin manifest and the marketplace file that make the repository installable |
+| `skills/review/SKILL.md` | The skill: how Claude publishes the page, loads documents and posts reviews |
+| `page/read-along-review.html` | The review page |
+| `tools/pr_loader.py` | Loads a pull request's markdown files, changed lines and review comments (or local files) for the page |
+| `tools/post_review.py` | Plans a review (changing nothing), then posts it |
+| `docs/` | How Read-Along behaves: product overview, one document per feature area, security. Start at [docs/README.md](docs/README.md). |
+| `examples/` | A sample design document to try it on |
+
+### Running the scripts directly
 
 ```bash
 python3 tools/pr_loader.py pr OWNER/REPO NUMBER OUT_DIR
 ```
 
 ```bash
-python3 tools/pr_loader.py local OUT_DIR path/to/file.md [more.md]
+python3 tools/pr_loader.py local OUT_DIR path/to/file.md
 ```
 
-## Known limits
+```bash
+python3 tools/post_review.py plan --pr OWNER/REPO NUMBER --data EXPORT_DIR --edit-mode suggest --outside summary --revert-comments on --out plan.json
+```
 
-- The page cannot use the microphone itself inside claude.ai, so voice commands rely on the operating system's dictation into the command box.
-- Speech usually stops when a phone's screen locks; the page keeps the screen awake while reading.
+```bash
+python3 tools/post_review.py execute --plan plan.json --out result.json --repo-dir path/to/clone
+```
+
+## License
+
+[MIT](LICENSE). Use at your own responsibility; see the disclaimer above.

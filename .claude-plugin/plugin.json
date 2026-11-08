@@ -1,0 +1,19 @@
+{
+  "name": "read-along",
+  "version": "0.1.0",
+  "description": "Review markdown in pull requests by listening: a page reads the document aloud section by section, you add comments and edits by click, keyboard or voice, and Claude posts them as a pull request review when you confirm.",
+  "author": {
+    "name": "pinkasey"
+  },
+  "homepage": "https://github.com/pinkasey/claude-read-along",
+  "repository": "https://github.com/pinkasey/claude-read-along",
+  "license": "MIT",
+  "keywords": [
+    "review",
+    "markdown",
+    "pull-request",
+    "text-to-speech",
+    "accessibility"
+  ],
+  "icon": ".claude-plugin/icon.png"
+}

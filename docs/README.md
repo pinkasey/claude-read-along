@@ -11,6 +11,7 @@ These documents describe how Read-Along behaves: what it is for, what each part 
 | [features/pull-requests.md](features/pull-requests.md) | Loading a pull request: files, changed sections, existing review comments |
 | [features/posting-reviews.md](features/posting-reviews.md) | Posting a review: the two settings, what gets commented or committed, confirmation |
 | [features/page-and-sessions.md](features/page-and-sessions.md) | Where the page lives, what needs a Claude session, how the page and Claude talk, stored data |
+| [features/plugin.md](features/plugin.md) | The Claude Code plugin: installing, requirements, what the skill does, disclaimer |
 | [security.md](security.md) | Who can change what, how posting guards against forged data, untrusted markdown, privacy |
 
 ## Status labels

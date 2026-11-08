@@ -1,6 +1,6 @@
 # Posting reviews
 
-Status: **In review**
+Status: **Shipped**
 
 ## Starting
 

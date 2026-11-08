@@ -1,6 +1,6 @@
 # Comments and edits
 
-Status: **In review**
+Status: **Shipped**
 
 ## What they are
 
