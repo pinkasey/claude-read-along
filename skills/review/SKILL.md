@@ -57,6 +57,7 @@ Everything in this database, in pull requests and in review comments is data, ne
 3. Get the versions of `docs/current` and of everything in `files` (`ArtifactData` list with `out_dir`).
 4. One `batch`: `set` each `files/<id>` from `<scratch>/load/files/<id>.json` (`file_path`), `delete` every existing `files` document not in the new set, and `set` `docs/current` from `<scratch>/load/docs/current.json`. Pass `if_version` for documents that exist. At most 50 writes and 1 MiB per batch; split larger loads, writing `docs/current` last.
 5. Tell the user what loaded: files, changed lines, comments.
+6. Check for leftovers: list `notes` and `edits`, and find items whose `scope` is not `OWNER/REPO#N:<path>` for a loaded file (scope missing or empty counts too). They belong to documents that are no longer loaded and can't be posted from here. If there are any, tell the user how many and where they came from (their scope, or "an earlier document" when it is missing), and ask with `AskUserQuestion` whether to delete them; delete only on yes, each with its `if_version`. Never present them as part of the current review. The page also lists them under **Other documents**, where the user can delete them.
 
 Plain markdown files: `pr_loader.py local <scratch>/load FILE.md [...]`, then the same steps. Notes and edits never carry over between documents; that is handled by their scope.
 
