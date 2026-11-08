@@ -1,6 +1,6 @@
 # Repositories
 
-Status: **In review**
+Status: **Shipped** ([#9](https://github.com/pinkasey/claude-read-along/pull/9))
 
 Reading the markdown of a repository, or one folder of it, without a pull request. The reviewer may only decide to propose changes while listening; the review pull request is created when they first post.
 
