@@ -10,14 +10,15 @@ It works with a pull request (changed sections, existing review comments, severa
 | --- | --- |
 | `page/read-along-review.html` | The review page, published by Claude as a private claude.ai page. Reading uses the browser's built-in speech. |
 | `tools/pr_loader.py` | Fetches a pull request's markdown files, changed lines and review comments with `gh`, and writes them as JSON documents for the page's database. Also loads plain local files. |
+| `tools/post_review.py` | Posts a review to its pull request in two steps: `plan` (changes nothing) and `execute`. |
 | `examples/sample-design-doc.md` | A sample design document to try it on. |
 
 ## How a review goes
 
-1. In a Claude Code session, ask Claude to load a pull request (`owner/repo` and number) or a markdown file into the review page.
+1. Open a pull request from the page (**Open pull request**), or ask Claude in the chat to load a pull request or a markdown file.
 2. Open the page. Press play, or click any section.
 3. Take notes and make edits as you listen. Claude can read them back at any time.
-4. Tell Claude "post my review". Claude shows what it will post and posts only after you confirm.
+4. Press **Post review** in the page, or tell Claude "post my review". Claude shows what it will post and commit, and acts only after you confirm.
 
 ## Page features
 
@@ -27,6 +28,25 @@ It works with a pull request (changed sections, existing review comments, severa
 - Notes and edits per file; edits can be proposed by voice ("change 2,000 to 3,000", "edit make this shorter").
 - Voice commands, dictated with the operating system's own dictation (Win+H on Windows, the keyboard microphone on phones), typed into the command box: play, pause, next, back, repeat, faster, slower, next chapter, next change, next comment, next file, go to line N, add note …, undo.
 - Speed 0.8× to 3×, voice choice, keep-screen-on.
+
+## Posting a review
+
+GitHub only accepts review comments on lines inside the pull request's diff. Two settings decide what happens, chosen in the page's **Post review** panel and saved per person:
+
+| Setting | Default | Alternative |
+| --- | --- | --- |
+| Edits on changed lines | Suggested changes the author applies with one click | Committed to the pull request branch |
+| Notes and edits on unchanged lines | Listed in the review summary with line numbers | Committed (a `<!-- review note -->` marker for a note, the edited text for an edit), with a review comment on it |
+
+Claude always asks before committing anything. Pull requests from forks cannot be committed to, so those items fall back to suggestions or the summary.
+
+```bash
+python3 tools/post_review.py plan --pr OWNER/REPO NUMBER --data EXPORT_DIR --edit-mode suggest --outside summary --out plan.json
+```
+
+```bash
+python3 tools/post_review.py execute --plan plan.json --out result.json
+```
 
 ## Commands for the loader
 
