@@ -71,7 +71,7 @@ python3 tools/post_review.py plan --pr OWNER/REPO NUMBER --data EXPORT_DIR --edi
 ```
 
 ```bash
-python3 tools/post_review.py execute --plan plan.json --out result.json
+python3 tools/post_review.py execute --plan plan.json --out result.json --repo-dir path/to/clone
 ```
 
 ## Commands for the loader

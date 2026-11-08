@@ -2,7 +2,7 @@
 """Post a Read-Along review to its pull request, in two steps.
 
   post_review.py plan    --pr OWNER/REPO NUMBER --data DIR [--edit-mode suggest|commit] [--outside summary|anchor] --out PLAN.json
-  post_review.py execute --plan PLAN.json --out RESULT.json
+  post_review.py execute --plan PLAN.json --out RESULT.json [--repo-dir CLONE]
 
 DIR holds the page's notes and edits as exported from its database: DIR/notes/*.json, DIR/edits/*.json,
 and DIR/docs/current.json (to check the pull request has not moved since it was loaded).
@@ -22,6 +22,8 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
+import time
 from urllib.parse import quote
 
 MARKER = "<!-- review note -->"
@@ -237,7 +239,51 @@ def apply_ops(lines, ops):
     return out, new_line, placed
 
 
-def execute(plan_path):
+def git(repo_dir, *args, input=None):
+    out = subprocess.run(["git", "-C", repo_dir, *args], input=input, capture_output=True, text=True)
+    if out.returncode != 0:
+        raise RuntimeError(f"git {' '.join(args)} failed: {out.stderr.strip() or out.stdout.strip()}")
+    return out.stdout.strip()
+
+
+def commit_with_git(repo_dir, repo, plan, new_files, msg):
+    """One commit on the pull request branch, made on top of exactly the planned head, pushed as a
+    fast-forward (never forced: if the branch moved, the push is refused)."""
+    origin = git(repo_dir, "remote", "get-url", "origin")
+    if not re.search(rf"[/:]{re.escape(repo)}(\.git)?$", origin):
+        raise SystemExit(f"{repo_dir} is a clone of {origin}, not {repo}.")
+    branch = plan["headRef"]
+    git(repo_dir, "fetch", "--quiet", "origin", f"+refs/heads/{branch}:refs/remotes/origin/{branch}")
+    if git(repo_dir, "rev-parse", f"refs/remotes/origin/{branch}") != plan["headSha"]:
+        raise SystemExit(f"{branch} has new commits since the plan was made. Make a new plan.")
+    work = tempfile.mkdtemp(prefix="readalong-")
+    git(repo_dir, "worktree", "add", "--quiet", "--detach", work, plan["headSha"])
+    try:
+        for path, text in new_files.items():
+            full = os.path.join(work, path)
+            if os.path.commonpath([os.path.realpath(full), os.path.realpath(work)]) != os.path.realpath(work):
+                raise SystemExit(f"Refusing a path outside the repository: {path}")
+            with open(full, "w", encoding="utf-8", newline="") as f:
+                f.write(text)
+            git(work, "add", "--", path)
+        git(work, "commit", "--quiet", "-F", "-", input=msg)
+        git(work, "push", "--quiet", "origin", f"HEAD:refs/heads/{branch}")
+        return git(work, "rev-parse", "HEAD")
+    finally:
+        subprocess.run(["git", "-C", repo_dir, "worktree", "remove", "--force", work], capture_output=True)
+
+
+def wait_for_head(repo, number, sha, tries=15):
+    """GitHub updates a pull request's head shortly after a push; comments need the new head."""
+    for _ in range(tries):
+        if gh(f"repos/{repo}/pulls/{number}")["head"]["sha"] == sha:
+            return
+        time.sleep(2)
+    raise SystemExit(f"Committed {sha[:7]} to the branch, but the pull request did not show it yet, so no comments were posted. "
+                     "Make a new plan from the notes that were not posted (the committed items are already on the branch).")
+
+
+def execute(plan_path, repo_dir=None):
     plan = json.load(open(plan_path, encoding="utf-8"))
     repo, number = plan["repo"], plan["number"]
     pr = gh(f"repos/{repo}/pulls/{number}")
@@ -257,24 +303,34 @@ def execute(plan_path):
             by_path.setdefault(x["path"], []).append((x["line"], x["endLine"], x["new"], x))
         elif x["do"] == "commit-marker":
             by_path.setdefault(x["path"], []).append((x["endLine"] + 1, x["endLine"], [x["marker"]], x))
+    new_files, blob_shas = {}, {}
     for path, ops in by_path.items():
         text, sha = file_text(repo, path, plan["headSha"])
         new_lines, new_line, placed = apply_ops(text.split("\n"), ops)
         mapping[path] = new_line
         for start, end, new_start, n_new, act in placed:
             act["newLine"], act["newEndLine"] = new_start, new_start + max(n_new, 1) - 1
-        n_edit = sum(1 for o in ops if o[3]["source"] == "edit")
-        n_note = len(ops) - n_edit
+        new_files[path], blob_shas[path] = "\n".join(new_lines), sha
+    if new_files:
+        ops_all = [o for ops in by_path.values() for o in ops]
+        n_edit = sum(1 for o in ops_all if o[3]["source"] == "edit")
+        n_note = len(ops_all) - n_edit
         msg = "Review: " + ", ".join(p for p in [plural(n_edit, "edit") if n_edit else "", plural(n_note, "note marker") if n_note else ""] if p)
-        msg += f" in {path}\n\nCommitted from a Read-Along review of #{number}."
+        msg += f"\n\nCommitted from a Read-Along review of #{number}:\n" + "\n".join(f"- {p}" for p in sorted(new_files))
         if os.environ.get("READALONG_COMMIT_TRAILER"):  # attribution lines, supplied by the session that posts
             msg += "\n\n" + os.environ["READALONG_COMMIT_TRAILER"]
-        res = gh(contents_url(repo, path), "PUT", {
-            "message": msg, "branch": plan["headRef"], "sha": sha,
-            "content": base64.b64encode("\n".join(new_lines).encode("utf-8")).decode("ascii"),
-        })
-        head = res["commit"]["sha"]
-        commits.append({"path": path, "sha": head, "url": res["commit"]["html_url"]})
+        if repo_dir:
+            head = commit_with_git(repo_dir, repo, plan, new_files, msg)
+            commits.append({"path": ", ".join(sorted(new_files)), "sha": head, "url": f"https://github.com/{repo}/commit/{head}"})
+        else:
+            for path, text in new_files.items():  # the contents API makes one commit per file
+                res = gh(contents_url(repo, path), "PUT", {
+                    "message": msg, "branch": plan["headRef"], "sha": blob_shas[path],
+                    "content": base64.b64encode(text.encode("utf-8")).decode("ascii"),
+                })
+                head = res["commit"]["sha"]
+                commits.append({"path": path, "sha": head, "url": res["commit"]["html_url"]})
+        wait_for_head(repo, number, head)
 
     # Comments, on the lines as they are after the commits.
     _, hunks = pr_state(repo, number) if commits else (None, None)
@@ -348,12 +404,13 @@ if __name__ == "__main__":
     x = sub.add_parser("execute")
     x.add_argument("--plan", required=True)
     x.add_argument("--out", required=True)
+    x.add_argument("--repo-dir", help="a local clone of the repository: commit with git (fetch, commit, push) instead of the contents API")
     a = ap.parse_args()
     if a.cmd == "plan":
         plan = make_plan(a)
         json.dump(plan, open(a.out, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
         print(describe(plan))
     else:
-        res = execute(a.plan)
+        res = execute(a.plan, a.repo_dir)
         json.dump(res, open(a.out, "w", encoding="utf-8"), indent=1)
         print(json.dumps(res, indent=1))

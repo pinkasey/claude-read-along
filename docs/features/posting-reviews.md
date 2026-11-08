@@ -42,6 +42,7 @@ Everything goes into one review (state "comment"; never "approve" or "request ch
 
 - If the pull request has new commits since it was loaded, Claude warns that line numbers may have moved, and asks the reviewer to reload and check before posting.
 - Commits are made against the exact version that was planned. If a file changed in between, GitHub refuses the commit, and nothing is posted.
+- All committed items go into one commit, made in a separate git worktree of the session's clone on top of the planned head and pushed as a fast-forward, never forced. Without a clone, the script uses GitHub's contents API instead (one commit per file), where the environment allows it.
 - After committing, Claude checks that every comment still lands inside the diff; any that do not move to the summary.
 - Pull requests from forks cannot be committed to. Their commit items become suggestions or summary entries, and Claude says so.
 - Suggestions and quoted text are fenced so that code blocks inside them stay intact.
