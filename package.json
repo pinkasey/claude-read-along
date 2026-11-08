@@ -1,0 +1,14 @@
+{
+  "name": "claude-read-along",
+  "private": true,
+  "description": "Development tooling for the Read-Along Claude Code plugin.",
+  "license": "MIT",
+  "scripts": {
+    "test:page": "node --test --test-concurrency=1 \"tests/page/*.test.js\"",
+    "test:python": "python3 -m unittest discover -s tests/python -v",
+    "check": "python3 tools/ci/check_repo.py --base origin/main"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

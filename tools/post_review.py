@@ -51,7 +51,8 @@ def gh(path, method="GET", body=None, paginate=False):
 def load(dir_, col):
     out = []
     for f in sorted(glob.glob(os.path.join(dir_, col, "*.json"))):
-        d = json.load(open(f, encoding="utf-8"))
+        with open(f, encoding="utf-8") as fh:
+            d = json.load(fh)
         d.setdefault("id", os.path.splitext(os.path.basename(f))[0])
         out.append(d)
     return out
@@ -143,7 +144,8 @@ def make_plan(a):
     loaded = {}
     cur = os.path.join(a.data, "docs", "current.json")
     if os.path.exists(cur):
-        loaded = (json.load(open(cur, encoding="utf-8")).get("pr") or {})
+        with open(cur, encoding="utf-8") as fh:
+            loaded = json.load(fh).get("pr") or {}
     if loaded.get("headSha") and loaded["headSha"] != head_sha:
         warnings.append(f"The pull request has new commits since it was loaded ({loaded['headSha'][:7]} -> {head_sha[:7]}). "
                         "Line numbers may have moved: reload it in the page and check your comments before posting.")
@@ -303,7 +305,8 @@ def wait_for_head(repo, number, sha, tries=15):
 
 
 def execute(plan_path, repo_dir=None):
-    plan = json.load(open(plan_path, encoding="utf-8"))
+    with open(plan_path, encoding="utf-8") as fh:
+        plan = json.load(fh)
     repo, number = plan["repo"], plan["number"]
     pr = gh(f"repos/{repo}/pulls/{number}")
     if pr["head"]["sha"] != plan["headSha"]:
@@ -432,9 +435,11 @@ if __name__ == "__main__":
     a = ap.parse_args()
     if a.cmd == "plan":
         plan = make_plan(a)
-        json.dump(plan, open(a.out, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+        with open(a.out, "w", encoding="utf-8") as fh:
+            json.dump(plan, fh, ensure_ascii=False, indent=1)
         print(describe(plan))
     else:
         res = execute(a.plan, a.repo_dir)
-        json.dump(res, open(a.out, "w", encoding="utf-8"), indent=1)
+        with open(a.out, "w", encoding="utf-8") as fh:
+            json.dump(res, fh, indent=1)
         print(json.dumps(res, indent=1))

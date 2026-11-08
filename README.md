@@ -100,6 +100,7 @@ Claude always asks before committing. Pull requests from forks cannot be committ
 | `tools/post_review.py` | Plans a review (changing nothing), then posts it |
 | `docs/` | How Read-Along behaves: product overview, one document per feature area, security. Start at [docs/README.md](docs/README.md). |
 | `examples/` | A sample design document to try it on |
+| `tests/`, `tools/ci/`, `.github/workflows/` | Tests and CI; see [docs/development.md](docs/development.md) |
 
 ### Running the scripts directly
 

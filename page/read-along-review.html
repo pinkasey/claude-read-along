@@ -1,6 +1,6 @@
 <title>Read-Along Review</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="read-along-version" content="0.1.2">
+<meta name="read-along-version" content="0.1.3">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&family=Literata:opsz,wght@7..72,400;7..72,600;7..72,700&display=swap">
@@ -1056,8 +1056,9 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
   });
   const savedRate = ls.get("rate", null); if (savedRate) $("rateSel").value = savedRate;
   document.addEventListener("keydown", (e) => {
-    if ((e.key === " " || e.key === "Enter") && e.target.closest("button, a, summary, [role=button], dialog")) return;
-    if (e.target.closest("textarea, input, select, dialog") || e.ctrlKey || e.metaKey || e.altKey) {
+    // Space and Enter keep their own meaning on controls; arrows still work after ticking a checkbox.
+    if ((e.key === " " || e.key === "Enter") && e.target.closest("button, a, summary, [role=button], dialog, input[type=checkbox], input[type=radio]")) return;
+    if (e.target.closest("textarea, select, dialog, input:not([type=checkbox]):not([type=radio])") || e.ctrlKey || e.metaKey || e.altKey) {
       if (e.key === "Escape" && S.composer) { S.composer = null; render(); }
       return;
     }
