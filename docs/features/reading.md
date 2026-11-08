@@ -71,6 +71,8 @@ The right-hand panel (the **Review list** button on narrow screens) starts with 
 
 Speed, voice and the toggles are remembered in the browser.
 
+On a phone, these settings fold behind a **Settings** button next to **Comment** and **Edit**, so the player takes less room from the text; the button opens and closes them, and the page remembers which.
+
 ## When speech is not available
 
 If the browser cannot speak, pressing play says so. Everything else (reading on screen, comments, edits) still works.

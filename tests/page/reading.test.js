@@ -96,6 +96,10 @@ for (const vp of [{ width: 1280, height: 800, name: "desktop" }, { width: 390, h
     assert.equal(r.top, 0);
     assert.ok(r.height < (vp.name === "phone" ? 160 : 130), "header height " + r.height);
     assert.equal(r.wide, false, "no sideways scroll");
+    if (vp.name === "phone") {
+      const title = await t.q(() => { const h = document.getElementById("docTitle"); return { lines: Math.round(h.getBoundingClientRect().height / parseFloat(getComputedStyle(h).lineHeight)), text: h.textContent }; });
+      assert.equal(title.lines, 1, "a long title stays on one line: " + title.text);
+    }
     await t.close();
   });
 }
@@ -117,4 +121,23 @@ test("in voice mode the page never takes focus from outside it", async () => {
   assert.equal(await page.evaluate(() => document.activeElement.id), "chat");
   assert.equal(await page.inputValue("#chat"), "hello");
   await browser.close();
+});
+
+test("on a phone the settings fold behind a Settings button; on a desktop they are always shown", async () => {
+  const phone = await open({ local: SMALL, viewport: { width: 390, height: 844 } });
+  const state = (t) => t.q(() => ({ shown: getComputedStyle(document.querySelector(".player .settings")).display !== "none", button: getComputedStyle(document.getElementById("settingsBtn")).display !== "none", player: document.querySelector(".player").offsetHeight }));
+  const folded = await state(phone);
+  assert.deepEqual([folded.shown, folded.button], [false, true]);
+  await phone.page.click("#settingsBtn");
+  const open1 = await state(phone);
+  assert.equal(open1.shown, true);
+  assert.ok(open1.player > folded.player + 40, `the player grows when opened (${folded.player} -> ${open1.player})`);
+  assert.equal(await phone.page.getAttribute("#settingsBtn", "aria-expanded"), "true");
+  await phone.page.click("#settingsBtn");
+  assert.equal((await state(phone)).shown, false);
+  await phone.close();
+  const desk = await open({ local: SMALL });
+  const d = await state(desk);
+  assert.deepEqual([d.shown, d.button], [true, false]);
+  await desk.close();
 });
