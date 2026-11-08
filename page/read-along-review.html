@@ -1,6 +1,6 @@
 <title>Read-Along Review</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="read-along-version" content="0.3.0">
+<meta name="read-along-version" content="0.3.1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&family=Literata:opsz,wght@7..72,400;7..72,600;7..72,700&display=swap">
@@ -396,6 +396,15 @@ header.top.folded .fold svg { transform: rotate(180deg); }
   }
   // Text of rendered HTML, with or without the hidden comments.
   const textWithout = (html) => { const d = document.createElement("div"); d.innerHTML = html; d.querySelectorAll(".md-hidden").forEach((e) => e.replaceWith(" ")); return (d.textContent || "").replace(/\s+/g, " ").trim(); };
+  // Text of rendered HTML split at the hidden comments: text and comments are separate parts, so a
+  // sentence never runs across a comment's edge when comments are read.
+  function partsOf(html, prefix) {
+    const d = document.createElement("div"); d.innerHTML = html;
+    d.querySelectorAll(".md-hidden").forEach((e) => e.replaceWith("\uE002" + e.textContent + "\uE002"));
+    const parts = (d.textContent || "").split("\uE002").map((t) => t.replace(/\s+/g, " ").trim()).filter(Boolean);
+    if (prefix) parts[0] = prefix + (parts[0] || "");
+    return parts;
+  }
   const FRONT_MATTER = /^---[ \t]*\r?\n([\s\S]*?)\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/;
   const ONLY_COMMENTS = /^(?:\s*<!--[\s\S]*?-->)+\s*$/;
 
@@ -462,7 +471,7 @@ header.top.folded .fold svg { transform: rotate(180deg); }
         let speech = textWithout(html);
         if (item.task) speech = (item.checked ? "Done: " : "To do: ") + speech;
         const l0 = lineAt(md, at);
-        push({ line: l0, endLine: l0 + (own.match(/\n/g) || []).length, type: "item", depth, marker, html, speech, speechAll: (item.task ? (item.checked ? "Done: " : "To do: ") : "") + textOf(html), own });
+        push({ line: l0, endLine: l0 + (own.match(/\n/g) || []).length, type: "item", depth, marker, html, speech, speechParts: partsOf(html, item.task ? (item.checked ? "Done: " : "To do: ") : ""), own });
         item.tokens.filter((t) => t.type === "list").forEach((sub) => { addList(sub, depth + 1, at); });
       });
     }
@@ -482,7 +491,6 @@ header.top.folded .fold svg { transform: rotate(180deg); }
       }
       const html = showHidden(marked.parser([tok]));
       let speech = textWithout(html);
-      let speechAll = textOf(html);
       let type = tok.type;
       if (type === "code") {
         const n = tok.text.split("\n").length;
@@ -491,8 +499,8 @@ header.top.folded .fold svg { transform: rotate(180deg); }
         continue;
       }
       if (type === "table") speech = tableSpeech(tok);
-      if (type === "blockquote") { speech = "Quote. " + speech; speechAll = "Quote. " + speechAll; }
-      push({ line, endLine, type, depth: tok.depth || 0, html, speech, speechAll: type === "table" ? speech : speechAll, own: tok.raw.trim() });
+      if (type === "blockquote") speech = "Quote. " + speech;
+      push({ line, endLine, type, depth: tok.depth || 0, html, speech, speechParts: type === "table" ? [speech] : partsOf(html, type === "blockquote" ? "Quote. " : ""), own: tok.raw.trim() });
     }
     return units;
   }
@@ -552,9 +560,10 @@ header.top.folded .fold svg { transform: rotate(180deg); }
       out.push({ text: u.speech, kind: "prefix" });
       u.codeText.split("\n").map((l) => l.trim()).filter(Boolean).forEach((l) => out.push({ text: l, kind: "code" }));
     } else {
-      const text = edit ? (hidden ? textOf : textWithout)(mdHtml(edit.text)) : (hidden && u.speechAll) || u.speech;
+      const parts = !hidden ? [edit ? textWithout(mdHtml(edit.text)) : u.speech]
+        : edit ? partsOf(mdHtml(edit.text)) : u.speechParts || [u.speech];
       const plain = u.type === "paragraph" || u.type === "heading" || u.type === "item" || u.type === "blockquote";
-      splitSentences(text).forEach((t) => out.push({ text: t, kind: plain ? "body" : "other" }));
+      parts.forEach((p) => splitSentences(p).forEach((t) => out.push({ text: t, kind: plain ? "body" : "other" })));
     }
     if ($("commentsChk").checked && u.comments) {
       u.comments.filter((c) => !isBot(c)).forEach((c) => {

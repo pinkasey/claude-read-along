@@ -66,7 +66,21 @@ test("Read hidden reads them", async () => {
   await next(t, 2); assert.equal(await t.lastSpoken(), "Hidden comment.");
   await next(t); assert.equal(await t.lastSpoken(), "TODO: check the numbers");
   await next(t); assert.equal(await t.lastSpoken(), "First sentence.");
-  await next(t); assert.equal(await t.lastSpoken(), "inline note Second sentence.");
+  await next(t); assert.equal(await t.lastSpoken(), "inline note");
+  await next(t); assert.equal(await t.lastSpoken(), "Second sentence.");
+  await t.close();
+});
+
+test("a comment is its own sentence, and is highlighted on its own", async () => {
+  const fx = fixture();
+  fx["files/f0"].markdown = "Options: matrix, multi-text <!-- this list is wrong. use our names --> or the accuracy check. <!-- rename it. resolved --> Done.\n";
+  const t = await open({ db: fx });
+  await t.page.check("#hiddenChk");
+  await t.page.click('.unit[data-i="0"]'); await t.page.waitForTimeout(100);
+  const said = [await t.lastSpoken()], lit = [await t.highlighted()];
+  for (let i = 0; i < 6; i++) { await t.end(1); said.push(await t.lastSpoken()); lit.push(await t.highlighted()); }
+  assert.deepEqual(said, ["Options: matrix, multi-text", "this list is wrong.", "use our names", "or the accuracy check.", "rename it.", "resolved", "Done."]);
+  assert.deepEqual(lit, said);
   await t.close();
 });
 

@@ -42,7 +42,7 @@ Text is spoken one sentence at a time, and long sentences are split at commas or
 
 A section that has an edit is read as edited.
 
-Comments inside a paragraph or list item are skipped, and with **Read hidden** on they are read where they appear.
+Comments inside a paragraph or list item are skipped, and with **Read hidden** on they are read where they appear, as sentences of their own: a sentence never runs across a comment's edge, so the text before a comment, the comment, and the text after it are read and highlighted separately.
 
 ## Highlighting and scrolling
 
