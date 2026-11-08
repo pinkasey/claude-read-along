@@ -32,6 +32,7 @@ A section that has an edit is read as edited.
 
 - The section being read has a highlight and a marker on its left edge, and is scrolled to the middle of the screen.
 - Inside headings, paragraphs, list items and quotes, the sentence being spoken has a stronger highlight. Browsers without the CSS Custom Highlight API keep the section highlight only.
+- The header (title, pull request, file picker, counts and buttons) stays at the top while scrolling, so switching files is always one click away. On a phone it is compact: one line each for the title and the pull request, the file picker, and one row of counts and buttons that scrolls sideways.
 - The player bar shows the current line, the position (for example 7/42), the section's first words, and a progress bar.
 
 ## Navigation
@@ -39,7 +40,8 @@ A section that has an edit is read as edited.
 | Action | Mouse or touch | Keyboard | Voice |
 | --- | --- | --- | --- |
 | Play / pause | Play button | Space or K | play, pause, stop |
-| Next / previous section | Arrow buttons | → or J / ← or H | next, back |
+| Next / previous sentence | | → / ← | next sentence, previous sentence |
+| Next / previous section | Arrow buttons | ↓ or J / ↑ or H | next, back |
 | Repeat the section | Repeat button | R | repeat |
 | Read from a section | Click or tap it | | go to line N |
 | Next / previous chapter | Outline | | next chapter, previous chapter, start of chapter |
@@ -47,6 +49,7 @@ A section that has an edit is read as edited.
 Rules:
 
 - Clicking a section starts reading there.
+- Moving by sentence crosses into the neighbouring section at a section's edge. While reading, it reads on from the new sentence; while paused, it highlights that sentence, and play starts from it.
 - With **Continuous** on (the default), reading moves to the next section by itself, with a slightly longer pause after headings. With it off, reading stops after each section.
 - Pausing keeps the sentence position; play resumes from that sentence.
 - Loading another document or switching files starts from the first section and sentence.
