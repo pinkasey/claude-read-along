@@ -28,7 +28,7 @@ GitHub accepts review comments only on lines inside the pull request's diff (cha
 | Edit | Inside the diff, **Suggest edits** | A suggested change replacing the section's lines |
 | Edit | Inside the diff, **Commit inline** | Committed to the branch; listed under "Committed during review" in the summary |
 | Edit | Outside the diff, **List in the summary** | Listed in the summary with the suggested text |
-| Edit | Outside the diff, **Commit and comment** | Committed, with a comment on the new lines showing the text it replaced |
+| Edit | Outside the diff, **Commit and comment** | Committed, with a comment on the new lines that says so and offers a one-click revert: "_To **REVERT** this change, press **Commit suggestion** below._", followed by a suggested change that restores the original lines |
 | Edit whose original text is no longer at its line | Anywhere | Listed in the summary, with the reason |
 
 Everything goes into one review (state "comment"; never "approve" or "request changes"), whose summary lists the commits made and the items not posted as line comments.

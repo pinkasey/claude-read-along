@@ -118,6 +118,14 @@ def removal_suggestion():
     return "```suggestion\n```"
 
 
+def revert_comment_body(commit_short, old_lines):
+    """The comment on an edit committed during review: says so, and offers a one-click revert
+    (a suggested change that puts the original lines back)."""
+    return (f"Edited during review (committed in {commit_short}).\n\n"
+            "_To **REVERT** this change, press **Commit suggestion** below._\n\n"
+            + fenced("\n".join(old_lines), "suggestion"))
+
+
 def plural(n, word):
     return f"{n} {word}{'' if n == 1 else 's'}"
 
@@ -357,7 +365,7 @@ def execute(plan_path, repo_dir=None):
             comments.append({"x": x, "c": {"path": x["path"], "line": x["newLine"], "side": "RIGHT", "body": body}})
         elif x["do"] == "commit-comment":
             short = commits[-1]["sha"][:7] if commits else ""
-            body = f"Edited during review (committed in {short}). It was:\n\n" + fenced("\n".join(x["old"]), "markdown")
+            body = revert_comment_body(short, x["old"])
             c = {"path": x["path"], "line": x["newEndLine"], "side": "RIGHT", "body": body}
             if x["newEndLine"] > x["newLine"]:
                 c.update(start_line=x["newLine"], start_side="RIGHT")
