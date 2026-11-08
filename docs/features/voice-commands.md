@@ -10,7 +10,7 @@ The page cannot use the microphone itself (see [product.md](../product.md#platfo
 - In voice mode, clicking a section or a player button keeps the cursor in the command box, so dictation can continue.
 - The page takes the cursor back only while the reviewer is working inside the page. Clicking outside it (Claude's chat box, a claude.ai permission prompt) leaves the cursor there.
 - Selecting text outside sections works in voice mode.
-- While the box is empty, Space plays or pauses and ← → move between sections.
+- While the box is empty, Space plays or pauses, ← → move one sentence, and ↑ ↓ move one section.
 
 ## Running a command
 
@@ -26,6 +26,7 @@ The page cannot use the microphone itself (see [product.md](../product.md#platfo
 | Reading | play, continue, resume | Read from the current position |
 | | pause, stop, wait | Pause |
 | | next, skip | Next section |
+| | next sentence, previous sentence | One sentence forward or back |
 | | back, previous | Previous section |
 | | repeat, again | Read the section again |
 | | faster, slower | One speed step up or down |

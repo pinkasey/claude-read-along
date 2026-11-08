@@ -40,7 +40,8 @@ A section that has an edit is read as edited.
 | Action | Mouse or touch | Keyboard | Voice |
 | --- | --- | --- | --- |
 | Play / pause | Play button | Space or K | play, pause, stop |
-| Next / previous section | Arrow buttons | → or J / ← or H | next, back |
+| Next / previous sentence | | → / ← | next sentence, previous sentence |
+| Next / previous section | Arrow buttons | ↓ or J / ↑ or H | next, back |
 | Repeat the section | Repeat button | R | repeat |
 | Read from a section | Click or tap it | | go to line N |
 | Next / previous chapter | Outline | | next chapter, previous chapter, start of chapter |
@@ -48,6 +49,7 @@ A section that has an edit is read as edited.
 Rules:
 
 - Clicking a section starts reading there.
+- Moving by sentence crosses into the neighbouring section at a section's edge. While reading, it reads on from the new sentence; while paused, it highlights that sentence, and play starts from it.
 - With **Continuous** on (the default), reading moves to the next section by itself, with a slightly longer pause after headings. With it off, reading stops after each section.
 - Pausing keeps the sentence position; play resumes from that sentence.
 - Loading another document or switching files starts from the first section and sentence.
