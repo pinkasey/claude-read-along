@@ -156,7 +156,8 @@ def load_local(out_dir, paths):
         fid = file_id(i, os.path.basename(path))
         write(out_dir, f"files/{fid}.json", {"path": path, "status": "local", "markdown": markdown, "added": None, "hunks": [], "comments": []})
         index.append({"id": fid, "path": path, "status": "local", "changed": 0, "comments": 0})
-    title = first_heading(open(paths[0], encoding="utf-8").read()) or os.path.basename(paths[0])
+    with open(paths[0], encoding="utf-8") as fh:
+        title = first_heading(fh.read()) or os.path.basename(paths[0])
     write(out_dir, "docs/current.json", {
         "title": title if len(paths) == 1 else f"{title} (+{len(paths) - 1} more)",
         "pr": None, "files": index, "defaultFile": index[0]["id"],

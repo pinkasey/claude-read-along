@@ -53,7 +53,7 @@ Rules:
 - With **Continuous** on (the default), reading moves to the next section by itself, with a slightly longer pause after headings. With it off, reading stops after each section.
 - Pausing keeps the sentence position; play resumes from that sentence.
 - Loading another document or switching files starts from the first section and sentence.
-- Keyboard shortcuts do not fire while typing in a field. Space and Enter on a focused button press that button.
+- Keyboard shortcuts do not fire while typing in a field. Space and Enter on a focused button press that button, and Space on a focused checkbox ticks it; the arrow keys keep working after ticking one.
 
 ## Outline
 
