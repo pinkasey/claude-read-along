@@ -20,14 +20,13 @@ These documents describe how Read-Along behaves: what it is for, what each part 
 
 Each feature document marks its parts:
 
-- **Shipped**: built and on the default branch.
-- **In review**: built, in an open pull request.
+- **Shipped**: built and on the default branch. A pull request that builds a feature marks it Shipped (with the pull request's link) in that same pull request: once merged, it is shipped.
 - **Planned**: agreed, not built yet.
 
 ## Adding a feature
 
 1. Add a section to the feature document it belongs to, or a new file under `features/` when it is a new area. Link a new file from the table above.
 2. Describe behavior from the reviewer's side: what they do, what they see and hear, and the rules the feature follows. Write each rule so it can be checked.
-3. Mark it **Planned** until the code lands, then update the status in the pull request that builds it.
+3. Mark it **Planned** when it is agreed but not built. The pull request that builds it marks it **Shipped**, linking to itself; there is no separate status while it is open.
 4. Add tests for it (see [development.md](development.md)).
 5. When a feature changes a rule in another document, change that document too.

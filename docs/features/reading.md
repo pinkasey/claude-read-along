@@ -17,7 +17,7 @@ Horizontal rules, blank lines and link definitions are not sections.
 
 ### Front matter and comments
 
-GitHub hides front matter (it shows it as a small table) and `<!-- comments -->` (it does not show them at all). The page shows both, so the reviewer sees what the file really says (**In review**):
+GitHub hides front matter (it shows it as a small table) and `<!-- comments -->` (it does not show them at all). The page shows both, so the reviewer sees what the file really says (**Shipped**, [#11](https://github.com/pinkasey/claude-read-along/pull/11)):
 
 - Front matter is shown as it is written, in a dashed box labeled "Front matter". It is never read as a heading or paragraph.
 - A comment block is shown in a dashed box labeled "Comment", with the comment's text.
@@ -42,7 +42,7 @@ Text is spoken one sentence at a time, and long sentences are split at commas or
 
 A section that has an edit is read as edited.
 
-Comments inside a paragraph or list item are skipped, and with **Read hidden** on they are read where they appear.
+Comments inside a paragraph or list item are skipped, and with **Read hidden** on they are read where they appear, as sentences of their own: a sentence never runs across a comment's edge, so the text before a comment, the comment, and the text after it are read and highlighted separately.
 
 ## Highlighting and scrolling
 
