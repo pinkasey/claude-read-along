@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("fs");
 const path = require("path");
 const { chromium } = require("playwright");
-const { open, closeBrowser, SAMPLE_LOCAL, wrappedPage } = require("./harness");
+const { open, closeBrowser, baseUrl, SAMPLE_LOCAL, wrappedPage } = require("./harness");
 
 after(closeBrowser);
 
@@ -96,6 +96,10 @@ for (const vp of [{ width: 1280, height: 800, name: "desktop" }, { width: 390, h
     assert.equal(r.top, 0);
     assert.ok(r.height < (vp.name === "phone" ? 160 : 130), "header height " + r.height);
     assert.equal(r.wide, false, "no sideways scroll");
+    if (vp.name === "phone") {
+      const title = await t.q(() => { const h = document.getElementById("docTitle"); return { lines: Math.round(h.getBoundingClientRect().height / parseFloat(getComputedStyle(h).lineHeight)), text: h.textContent }; });
+      assert.equal(title.lines, 1, "a long title stays on one line: " + title.text);
+    }
     await t.close();
   });
 }
@@ -108,7 +112,7 @@ test("in voice mode the page never takes focus from outside it", async () => {
   const context = await browser.newContext({ viewport: { width: 1500, height: 900 } });
   await context.addInitScript((doc) => { if (window.top !== window) localStorage.setItem("mdr:doc", JSON.stringify(doc)); }, SMALL);
   const page = await context.newPage();
-  await page.goto("file://" + path.join(dir, "outer.html")); await page.waitForTimeout(800);
+  await page.goto((await baseUrl()) + "outer.html"); await page.waitForTimeout(800);
   const frame = page.frame({ url: /page\.html/ });
   await frame.click("#cmdIn");
   await frame.click('.unit[data-i="1"]'); await page.waitForTimeout(200);
@@ -118,3 +122,47 @@ test("in voice mode the page never takes focus from outside it", async () => {
   assert.equal(await page.inputValue("#chat"), "hello");
   await browser.close();
 });
+
+test("on a phone the settings fold behind a Settings button; on a desktop they are always shown", async () => {
+  const phone = await open({ local: SMALL, viewport: { width: 390, height: 844 } });
+  const state = (t) => t.q(() => ({ shown: getComputedStyle(document.querySelector(".player .settings")).display !== "none", button: getComputedStyle(document.getElementById("settingsBtn")).display !== "none", player: document.querySelector(".player").offsetHeight }));
+  const folded = await state(phone);
+  assert.deepEqual([folded.shown, folded.button], [false, true]);
+  await phone.page.click("#settingsBtn");
+  const open1 = await state(phone);
+  assert.equal(open1.shown, true);
+  assert.ok(open1.player > folded.player + 40, `the player grows when opened (${folded.player} -> ${open1.player})`);
+  assert.equal(await phone.page.getAttribute("#settingsBtn", "aria-expanded"), "true");
+  await phone.page.click("#settingsBtn");
+  assert.equal((await state(phone)).shown, false);
+  await phone.close();
+  const desk = await open({ local: SMALL });
+  const d = await state(desk);
+  assert.deepEqual([d.shown, d.button], [true, false]);
+  await desk.close();
+});
+
+for (const vp of [{ width: 1280, height: 800, name: "desktop" }, { width: 390, height: 844, name: "phone" }]) {
+  test(`the top and bottom panels fold to one line and unfold (${vp.name})`, async () => {
+    const t = await open({ local: SAMPLE_LOCAL, viewport: vp });
+    const h = () => t.q(() => ({ header: document.querySelector("header.top").offsetHeight, player: document.querySelector(".player").offsetHeight }));
+    const before = await h();
+    await t.page.click("#foldHeader"); await t.page.click("#foldPlayer"); await t.page.waitForTimeout(100);
+    const folded = await h();
+    assert.ok(folded.header <= 48, "folded top panel " + folded.header);
+    assert.ok(folded.player <= 120, "folded bottom panel " + folded.player);
+    assert.equal(await t.page.isVisible("#docTitle"), true);
+    assert.equal(await t.page.isVisible("#playBtn"), true, "play stays in reach");
+    assert.equal(await t.page.isVisible("#cmdIn"), false);
+    assert.equal(await t.page.getAttribute("#foldHeader", "aria-expanded"), "false");
+    await t.page.click("#playBtn"); await t.page.waitForTimeout(100);
+    assert.ok(await t.lastSpoken(), "playing works while folded");
+    await t.page.waitForTimeout(300);
+    await t.page.reload(); await t.page.waitForTimeout(400);
+    assert.deepEqual(await h(), folded, "remembered after reload");
+    await t.page.click("#foldHeader"); await t.page.click("#foldPlayer"); await t.page.waitForTimeout(100);
+    assert.deepEqual(await h(), before, "unfolds to the same size");
+    await t.close();
+  });
+}
+
