@@ -20,6 +20,7 @@ This document proposes replacing the global limit with per-tenant limits, enforc
 
 - Limiting by individual API key within a tenant. We may add this later.
 - Changing the limits for internal service-to-service traffic.
+  <!-- review note -->
 
 ## Proposed design
 
