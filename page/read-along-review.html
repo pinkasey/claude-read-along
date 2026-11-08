@@ -233,9 +233,9 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
       <select id="filePick" class="file-pick" hidden></select>
     </div>
     <div class="pending">
-      <span class="chip note" id="chipNotes">0 notes</span>
+      <span class="chip note" id="chipNotes">0 comments</span>
       <span class="chip edit" id="chipEdits">0 edits</span>
-      <span class="chip mode" id="chipMode" title="Where notes and edits are kept">Connecting…</span>
+      <span class="chip mode" id="chipMode" title="Where your comments and edits are kept">Connecting…</span>
       <button class="btn small rail-toggle" id="railToggle" aria-expanded="false" aria-controls="rail">Review list</button>
       <button class="btn small" id="openPrBtn">Open pull request</button>
       <button class="btn small" id="loadBtn">Load file</button>
@@ -247,7 +247,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
 <main>
   <div class="wrap">
     <article class="doc" id="doc" aria-live="off"></article>
-    <aside class="rail" id="rail" aria-label="Review notes and edits">
+    <aside class="rail" id="rail" aria-label="Your review comments and edits">
       <div class="rail-inner" id="railInner"></div>
     </aside>
   </div>
@@ -268,9 +268,9 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
       <div><b>Reading</b> play · pause / stop · next · back · repeat · faster · slower</div>
       <div><b>Moving</b> next chapter · previous chapter · start of chapter · go to line 40 · from the top</div>
       <div><b>Pull request</b> next change · previous change · next comment · next file · previous file</div>
-      <div><b>Notes</b> add note <i>your text</i> · undo</div>
+      <div><b>Comments</b> add comment <i>your text</i> · undo</div>
       <div><b>Edits</b> change <i>2,000</i> to <i>3,000</i> · edit <i>make this shorter</i> · then accept or cancel</div>
-      <div class="cmd-tip">A command runs when you pause speaking, or press Enter. Notes and edits apply to the section that was being read when you started speaking. Use headphones so the microphone doesn't hear the reader.</div>
+      <div class="cmd-tip">A command runs when you pause speaking, or press Enter. Comments and edits apply to the section that was being read when you started speaking. Use headphones so the microphone doesn't hear the reader.</div>
     </div>
     <div class="controls">
       <div class="transport">
@@ -280,7 +280,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
         <button class="icon-btn" id="repeatBtn" title="Repeat section (R)" aria-label="Repeat section"><svg viewBox="0 0 24 24"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z"/></svg></button>
       </div>
       <div class="actions">
-        <button class="btn" id="noteBtn">Note <span class="kbd">N</span></button>
+        <button class="btn" id="noteBtn">Comment <span class="kbd">C</span></button>
         <button class="btn" id="editBtn">Edit <span class="kbd">E</span></button>
       </div>
       <div class="settings">
@@ -530,7 +530,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
     const notesBy = {};
     S.notes.forEach((n) => (notesBy[n.key] = notesBy[n.key] || []).push(n));
     const html = S.units.map((u, i) => {
-      const notes = (notesBy[u.key] || []).map((n) => '<div class="inline-note"><b>Note</b>' + esc(n.text) + "</div>").join("");
+      const notes = (notesBy[u.key] || []).map((n) => '<div class="inline-note"><b>Your comment</b>' + esc(n.text) + "</div>").join("");
       let comp = "";
       if (S.composer && S.composer.key === u.key) comp = composerHtml(u);
       const gh = (u.comments || []).map((c) =>
@@ -551,9 +551,9 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
   }
   function composerHtml(u) {
     if (S.composer.kind === "note") {
-      return '<div class="composer" data-stop="1"><label for="composerText">Review note on line ' + u.line + '</label>' +
+      return '<div class="composer" data-stop="1"><label for="composerText">Your comment on line ' + u.line + '</label>' +
         '<textarea id="composerText" placeholder="What should change here?">' + esc(S.composer.draft || "") + "</textarea>" +
-        '<div class="row"><button class="btn primary" data-act="save-note">Save note</button><button class="btn" data-act="cancel">Cancel</button></div></div>';
+        '<div class="row"><button class="btn primary" data-act="save-note">Save comment</button><button class="btn" data-act="cancel">Cancel</button></div></div>';
     }
     const cur = S.composer.draft != null ? S.composer.draft : S.composer.proposed != null ? S.composer.proposed : S.edits[u.key] ? S.edits[u.key].text : u.own;
     return '<div class="composer" data-stop="1"><label for="composerText">Edit markdown, line ' + u.line + '</label>' +
@@ -593,7 +593,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
     $("changedLbl").hidden = !S.hasChanges;
     $("announceLbl").hidden = !S.hasChanges;
     $("commentsLbl").hidden = !nc;
-    $("chipNotes").textContent = S.notes.length + (S.notes.length === 1 ? " note" : " notes");
+    $("chipNotes").textContent = S.notes.length + (S.notes.length === 1 ? " comment" : " comments");
     const ne = Object.keys(S.edits).length;
     $("chipEdits").textContent = ne + (ne === 1 ? " edit" : " edits");
     $("chipMode").textContent = S.readOnly ? "View only" : S.mode === "shared" ? "Saved for Claude · not posted" : S.mode === "local" ? "Saved in this browser only" : "Connecting…";
@@ -617,10 +617,10 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
       .concat(Object.values(S.edits).map((e) => ({ kind: "edit", line: e.line, e })))
       .sort((a, b) => a.line - b.line);
     items.push("<h2>Review, not yet posted</h2>");
-    if (!byLine.length) items.push('<p class="hint">Notes and edits you make appear here. They stay with this page until you ask Claude to post them to the pull request.</p>');
+    if (!byLine.length) items.push('<p class="hint">Comments and edits you make appear here. They stay with this page until you ask Claude to post them to the pull request.</p>');
     byLine.forEach((x) => {
       if (x.kind === "note") {
-        items.push('<div class="item note"><div class="head"><span class="kind">Note</span><span class="line">line ' + x.line + "</span></div>" +
+        items.push('<div class="item note"><div class="head"><span class="kind">Comment</span><span class="line">line ' + x.line + "</span></div>" +
           "<div>" + esc(x.n.text) + '</div><div class="quote">' + esc(x.n.anchor || "") + "</div>" +
           '<div class="row"><button class="btn small" data-jump="' + esc(x.n.key) + '">Go to</button><button class="btn small ghost" data-del-note="' + esc(x.n.id) + '">Delete</button></div></div>');
       } else {
@@ -769,12 +769,12 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
     } else { S.meta = d; S.allNotes = []; S.allEdits = []; local.persist(); setDoc(); toast("Document loaded"); }
   }
   async function saveNote(u, text) {
-    if (S.readOnly) { toast("Only the page's owner can add notes."); return null; }
+    if (S.readOnly) { toast("Only the page's owner can add comments."); return null; }
     const n = { key: u.key, line: u.line, endLine: u.endLine || u.line, anchor: unitLabel(u), text, createdAt: new Date().toISOString(), scope: S.doc.scope || "", file: S.doc.path || "", changed: !!u.changed };
     if (S.mode === "shared") {
-      try { const ref = await S.db.collection("notes").add(n); n.id = ref.id; } catch (e) { toast("Note not saved: " + (e.message || e.code)); return null; }
+      try { const ref = await S.db.collection("notes").add(n); n.id = ref.id; } catch (e) { toast("Comment not saved: " + (e.message || e.code)); return null; }
     } else { n.id = "n" + Date.now(); S.allNotes.push(n); local.persist(); applyScope(); render(); }
-    toast("Note saved");
+    toast("Comment saved");
     return n.id;
   }
   async function deleteNote(id) {
@@ -921,7 +921,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
     const de = e.target.closest("[data-del-edit]"); if (de) return deleteEdit(de.dataset.delEdit);
   });
   function openComposer(kind) {
-    if (S.readOnly) { toast("Only the page's owner can add notes and edits."); return; }
+    if (S.readOnly) { toast("Only the page's owner can add comments and edits."); return; }
     const u = S.units[S.cur]; if (!u) return;
     pause();
     S.composer = { kind, key: u.key }; render();
@@ -973,7 +973,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
     else if (k === "ArrowRight" || k === "j") { e.preventDefault(); next(); }
     else if (k === "ArrowLeft" || k === "h") { e.preventDefault(); prev(); }
     else if (k === "r") repeat();
-    else if (k === "n") { e.preventDefault(); openComposer("note"); }
+    else if (k === "c" || k === "n") { e.preventDefault(); openComposer("note"); }
     else if (k === "e") { e.preventDefault(); openComposer("edit"); }
   });
 
@@ -1027,7 +1027,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
     clearTimeout(cmdTimer);
     if (!p) { feedback("Listening…"); cmdTimer = setTimeout(() => runCommandText(), 2600); return; }
     const long = p.action === "note" || p.action === "change" || p.action === "ask-edit";
-    if (long) feedback((p.action === "note" ? "Note" : "Edit") + " ready: “" + (p.text || p.instruction || p.from + " → " + p.to) + "”. Keep talking, or pause to save.");
+    if (long) feedback((p.action === "note" ? "Comment" : "Edit") + " ready: “" + (p.text || p.instruction || p.from + " → " + p.to) + "”. Keep talking, or pause to save.");
     cmdTimer = setTimeout(() => runCommandText(), long ? 3000 : 1100);
   });
   cmdIn.addEventListener("keydown", (e) => {
@@ -1071,13 +1071,13 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
     if (one(/^(from the top|start over|from the beginning|go to (the )?(top|start|beginning))$/)) return { action: "top" };
     if (one(/^(faster|speed up|read faster)$/)) return { action: "faster" };
     if (one(/^(slower|slow down|read slower)$/)) return { action: "slower" };
-    if (one(/^(undo|undo that|remove (that|the last one)|delete (that|the last note))$/)) return { action: "undo" };
+    if (one(/^(undo|undo that|remove (that|the last one)|delete (that|the last (note|comment)))$/)) return { action: "undo" };
     if (one(/^(help|commands|show commands|what can i say)$/)) return { action: "help" };
     if (one(/^(edit|edit this|edit (this|the) section|edit section)$/)) return { action: "edit-open" };
     if (one(/^(note|add (a )?note|make (a )?note|comment|add (a )?comment)$/)) return { action: "note-open" };
     let m = /^(?:go to|jump to|skip to)?\s*line\s+(\d+)$/.exec(t);
     if (m) return { action: "line", line: Number(m[1]) };
-    // Keep the original wording for notes and edits.
+    // Keep the original wording for comments and edits.
     const rawT = raw.trim().replace(/^[\s.,!?;:-]+/, "").replace(/^(please|ok|okay|hey)[\s,]+/i, "");
     m = /^(?:add (?:a )?note|make (?:a )?note|note|add (?:a )?comment|comment|review note)\b[\s,:.\-]*(.+)$/i.exec(rawT);
     if (m && stripQuotes(m[1])) return { action: "note", text: cap(m[1].trim().replace(/\s+/g, " ")) };
@@ -1216,8 +1216,9 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
         goTo(j); break;
       }
       case "next-comment": {
-        const j = S.units.findIndex((x, k) => k > S.cur && (x.comments || []).some((c) => !isBot(c)));
-        if (j < 0) { feedback("No more review comments in this file.", "warn"); return; }
+        // GitHub comments (not bots) and your own unposted comments
+        const j = S.units.findIndex((x, k) => k > S.cur && ((x.comments || []).some((c) => !isBot(c)) || S.notes.some((n) => n.key === x.key)));
+        if (j < 0) { feedback("No more comments in this file.", "warn"); return; }
         goTo(j); break;
       }
       case "next-file": case "prev-file": {
@@ -1231,11 +1232,11 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
       case "faster": if (!stepRate(1)) { feedback("Already at the fastest speed.", "warn"); return; } break;
       case "slower": if (!stepRate(-1)) { feedback("Already at the slowest speed.", "warn"); return; } break;
       case "help": $("cmdHelp").hidden = false; $("cmdHelpBtn").setAttribute("aria-expanded", "true"); break;
-      case "note-open": S.cur = target; setActive(target, false); openComposer("note"); feedback("Type the note, or say “add note” followed by the text."); return;
+      case "note-open": S.cur = target; setActive(target, false); openComposer("note"); feedback("Type the comment, or say “add comment” followed by the text."); return;
       case "edit-open": S.cur = target; setActive(target, false); openComposer("edit"); feedback("Type the change, then Save edit."); return;
       case "note": {
         const id = await saveNote(u, p.text);
-        if (id) { undoStack.push({ type: "note", id }); feedback("Note added on line " + u.line + ": “" + p.text + "”", "ok"); }
+        if (id) { undoStack.push({ type: "note", id }); feedback("Comment added on line " + u.line + ": “" + p.text + "”", "ok"); }
         return;
       }
       case "change": {
@@ -1259,7 +1260,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
         const last = undoStack.pop();
         if (!last) { feedback("Nothing to undo.", "warn"); return; }
         if (last.type === "note") await deleteNote(last.id); else await deleteEditById(last.id);
-        feedback("Removed the last " + last.type + ".", "ok");
+        feedback("Removed the last " + (last.type === "note" ? "comment" : "edit") + ".", "ok");
         return;
       }
     }
@@ -1428,22 +1429,22 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
         const st = S.reviewSettings, c = plan.c, pr = plan.pr;
         const branch = pr.headRef || "the pull request branch";
         const L = [];
-        if (c.noteIn) L.push(["", c.noteIn, plural(c.noteIn, "note").replace(/^\d+ /, "") + " on changed lines → review comments on those lines"]);
+        if (c.noteIn) L.push(["", c.noteIn, plural(c.noteIn, "comment").replace(/^\d+ /, "") + " on changed lines → review comments on those lines"]);
         if (c.editIn) L.push(st.editMode === "commit" ? ["commit", c.editIn, plural(c.editIn, "edit").replace(/^\d+ /, "") + " on changed lines → committed to " + branch] : ["", c.editIn, plural(c.editIn, "edit").replace(/^\d+ /, "") + " on changed lines → suggested changes the author can apply"]);
-        if (c.noteOut) L.push(st.outside === "anchor" ? ["commit", c.noteOut, plural(c.noteOut, "note").replace(/^\d+ /, "") + " on unchanged lines → a <!-- review note --> marker committed after the section, with the comment on it"] : ["", c.noteOut, plural(c.noteOut, "note").replace(/^\d+ /, "") + " on unchanged lines → listed in the review summary"]);
+        if (c.noteOut) L.push(st.outside === "anchor" ? ["commit", c.noteOut, plural(c.noteOut, "comment").replace(/^\d+ /, "") + " on unchanged lines → a <!-- review comment --> marker committed after the section, with the comment on it"] : ["", c.noteOut, plural(c.noteOut, "comment").replace(/^\d+ /, "") + " on unchanged lines → listed in the review summary"]);
         if (c.editOut) L.push(st.outside === "anchor" ? ["commit", c.editOut, plural(c.editOut, "edit").replace(/^\d+ /, "") + " on unchanged lines → committed to " + branch + ", with a comment on each"] : ["", c.editOut, plural(c.editOut, "edit").replace(/^\d+ /, "") + " on unchanged lines → listed in the review summary, before and after"]);
         const commits = L.some((l) => l[0] === "commit");
         const ref = pr.repo + "#" + pr.number;
         const sentence = "Post my review for " + ref + ".";
         p.innerHTML = '<h2 id="panelTitle">Post review to ' + esc(ref) + "</h2>" +
           (plan.total ? '<div class="plan">' + L.map((l) => '<div class="pl ' + l[0] + '"><b>' + l[1] + "</b><span>" + esc(l[2]) + "</span></div>").join("") + "</div>"
-            : "<p>You have no notes or edits on this pull request yet.</p>") +
+            : "<p>You have no comments or edits on this pull request yet.</p>") +
           '<fieldset><legend>Edits on changed lines</legend>' +
           '<label class="opt"><input type="radio" name="em" value="suggest"' + (st.editMode === "suggest" ? " checked" : "") + '> Suggest edits<small>Review comments with suggested changes. The author applies them with one click.</small></label>' +
           '<label class="opt"><input type="radio" name="em" value="commit"' + (st.editMode === "commit" ? " checked" : "") + '> Commit inline<small>Claude commits the edits to the pull request branch.</small></label></fieldset>' +
-          '<fieldset><legend>Notes and edits on unchanged lines</legend>' +
+          '<fieldset><legend>Comments and edits on unchanged lines</legend>' +
           '<label class="opt"><input type="radio" name="out" value="summary"' + (st.outside === "summary" ? " checked" : "") + '> List in the summary<small>Nothing is committed. They go in the review summary with their line numbers.</small></label>' +
-          '<label class="opt"><input type="radio" name="out" value="anchor"' + (st.outside === "anchor" ? " checked" : "") + '> Commit and comment<small>GitHub only takes comments on lines in the diff, so Claude commits a marker (for a note) or your edited text (for an edit), and comments on it.</small></label></fieldset>' +
+          '<label class="opt"><input type="radio" name="out" value="anchor"' + (st.outside === "anchor" ? " checked" : "") + '> Commit and comment<small>GitHub only takes comments on lines in the diff, so Claude commits a marker (for a comment) or your edited text (for an edit), and comments on it.</small></label></fieldset>' +
           '<p class="saved-note">' + (S.settingsRef ? "These choices are saved as your defaults, on every device." : "These choices are saved as your defaults in this browser.") + "</p>" +
           (commits ? '<div class="warnbox">This review commits to <b>' + esc(branch) + "</b>. Claude asks you to confirm in the chat before committing anything.</div>" : "") +
           '<div class="say"><span>' + esc(sentence) + "</span></div>" +
@@ -1457,7 +1458,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
         p.querySelector("#postClose").addEventListener("click", closePanel);
         p.querySelector("#postGo").addEventListener("click", () => sendToClaude("[Read-Along page] " + sentence +
           " Settings: edits on changed lines = " + (S.reviewSettings.editMode === "commit" ? "commit inline" : "suggest edits") +
-          "; notes and edits on unchanged lines = " + (S.reviewSettings.outside === "anchor" ? "commit and comment" : "list in the summary") + ".", p.querySelector("#postStatus"), p.querySelector("#postGo")));
+          "; comments and edits on unchanged lines = " + (S.reviewSettings.outside === "anchor" ? "commit and comment" : "list in the summary") + ".", p.querySelector("#postStatus"), p.querySelector("#postGo")));
         if (plan.total) checkConnector(p.querySelector("#postStatus"), p.querySelector("#postGo"));
       };
       draw();

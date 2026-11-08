@@ -13,7 +13,7 @@ The document is split into reading sections, each read as one unit:
 
 Horizontal rules, blank lines and link definitions are not sections.
 
-Every section shows its starting line number from the file in a gutter, so notes and comments can point at real lines.
+Every section shows its starting line number from the file in a gutter, so comments can point at real lines.
 
 ## What is read aloud
 
@@ -70,4 +70,4 @@ Speed, voice and the toggles are remembered in the browser.
 
 ## When speech is not available
 
-If the browser cannot speak, pressing play says so. Everything else (reading on screen, notes, edits) still works.
+If the browser cannot speak, pressing play says so. Everything else (reading on screen, comments, edits) still works.

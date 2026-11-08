@@ -6,15 +6,15 @@ Read-Along handles text written by other people (pull request markdown and revie
 
 ## Who can change what
 
-- Only the page's owner can write its shared data: loaded documents, notes, edits, the reading position, and the session the page sends requests to. Anyone the page is shared with can read it.
+- Only the page's owner can write its shared data: loaded documents, comments, edits, the reading position, and the session the page sends requests to. Anyone the page is shared with can read it.
 - Each person can write only their own review settings, which nobody else can read.
-- A person viewing someone else's page sees "View only": note, edit, load and post controls are off.
+- A person viewing someone else's page sees "View only": comment, edit, load and post controls are off.
 
-This matters because posting turns notes and edits into comments and commits under the owner's GitHub account. If other people could write notes, they could post in the owner's name.
+This matters because posting turns the page's comments and edits into review comments and commits under the owner's GitHub account. If other people could write comments, they could post in the owner's name.
 
 ## Posting never trusts stored paths
 
-- The posting script acts only on markdown files the pull request adds or changes, as GitHub reports them when the plan is made, and again just before committing. A note or edit naming any other path (for example a CI workflow) is skipped with a warning.
+- The posting script acts only on markdown files the pull request adds or changes, as GitHub reports them when the plan is made, and again just before committing. A comment or edit naming any other path (for example a CI workflow) is skipped with a warning.
 - An item's scope must name the same pull request and file as the item itself.
 - Before posting, Claude shows every item with its file, line and text, and asks before committing anything.
 - Commits are made against the exact version that was planned; if a file changed in between, GitHub refuses the commit.
@@ -33,7 +33,7 @@ The two libraries are loaded from cdnjs with integrity hashes, so a modified cop
 ## Requests from the page to Claude
 
 - The page sends fixed sentences. A pull request reference is reduced to `OWNER/REPO#N`, with names limited to letters, digits, `.`, `-` and `_`.
-- Claude treats text from pull requests, comments, notes and page messages as data, not instructions.
+- Claude treats text from pull requests, review comments, the reviewer's comments and page messages as data, not instructions.
 - Anything that commits asks the reviewer in the chat first, whatever started it.
 
 ## Privacy

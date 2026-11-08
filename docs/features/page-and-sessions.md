@@ -7,14 +7,14 @@ Status: **In review**, except where marked **Planned**
 - The review page is a private claude.ai page (an Artifact) owned by the reviewer. Claude publishes it the first time the reviewer asks for a review, and it keeps the same link afterwards.
 - The reviewer reopens it from the link, from their artifacts at claude.ai/code/artifacts (`/artifacts` in the terminal), or from their claude.ai sidebar when pinned.
 - In the Claude Code app, it can sit in the side pane next to the chat.
-- Other people can open it only if the reviewer shares it from the page's Share menu. They see it as **View only**: only the owner can load documents, add notes and edits, or post. See [security.md](../security.md).
+- Other people can open it only if the reviewer shares it from the page's Share menu. They see it as **View only**: only the owner can load documents, add comments and edits, or post. See [security.md](../security.md).
 
 ## What needs Claude
 
 | On the page alone | Needs a Claude Code session |
 | --- | --- |
 | Listening, navigation, voice commands | Loading a pull request |
-| Notes and edits | Posting a review, committing |
+| Comments and edits | Posting a review, committing |
 | Opening or pasting a local markdown file | |
 | Edits proposed by voice (the page asks Claude directly, with the reviewer's permission) | |
 
@@ -30,7 +30,7 @@ Status: **In review**, except where marked **Planned**
 
 ## How Claude knows what "this section" means
 
-While reading, the page records the current file, line and section in its database, so the reviewer can say in the chat "make a note here" or "what did we just read?".
+While reading, the page records the current file, line and section in its database, so the reviewer can say in the chat "add a comment here" or "what did we just read?".
 
 ## Stored data
 
@@ -38,7 +38,7 @@ While reading, the page records the current file, line and section in its databa
 | --- | --- | --- |
 | The document set: title, pull request, list of files | Claude | Page |
 | Each file: markdown, changed lines, diff ranges, review comments | Claude | Page |
-| Notes and edits | Page | Page, Claude (to post) |
+| Comments and edits | Page | Page, Claude (to post) |
 | Current reading position | Page | Claude |
 | The session to send requests to | Claude | Page |
 | Each person's review settings (private to them) | Page | Page, Claude |

@@ -4,14 +4,15 @@
   post_review.py plan    --pr OWNER/REPO NUMBER --data DIR [--edit-mode suggest|commit] [--outside summary|anchor] --out PLAN.json
   post_review.py execute --plan PLAN.json --out RESULT.json [--repo-dir CLONE]
 
-DIR holds the page's notes and edits as exported from its database: DIR/notes/*.json, DIR/edits/*.json,
+DIR holds the page's comments and edits as exported from its database (comments are stored in its
+"notes" collection): DIR/notes/*.json, DIR/edits/*.json,
 and DIR/docs/current.json (to check the pull request has not moved since it was loaded).
 
 `plan` changes nothing. It prints what would happen and writes the plan.
 `execute` commits (when the plan says so) and posts one review with all the comments.
 
 Edits on changed lines:        suggest -> suggested changes;          commit -> committed to the PR branch.
-Notes/edits on unchanged lines: summary -> listed in the review body;  anchor -> committed (a marker for a note,
+Comments/edits on unchanged lines: summary -> listed in the review body; anchor -> committed (a marker for a comment,
                                 the edited text for an edit) with a review comment on it.
 """
 import argparse
@@ -26,7 +27,7 @@ import tempfile
 import time
 from urllib.parse import quote
 
-MARKER = "<!-- review note -->"
+MARKER = "<!-- review comment -->"
 MD_EXT = (".md", ".markdown", ".mdx")
 LIST_ITEM = re.compile(r"^(\s*)([-*+]|\d+[.)])(\s+)(\[[ xX]\]\s+)?")
 
@@ -66,7 +67,7 @@ def hunks_from_patch(patch):
 
 def pr_state(repo, number):
     """The pull request, and the diff ranges of the markdown files it adds or changes.
-    Only these files may be commented on or committed to: a path stored with a note or edit is
+    Only these files may be commented on or committed to: a path stored with a comment or edit is
     never trusted on its own."""
     pr = gh(f"repos/{repo}/pulls/{number}")
     files = gh(f"repos/{repo}/pulls/{number}/files?per_page=100", paginate=True)
@@ -144,7 +145,7 @@ def make_plan(a):
         loaded = (json.load(open(cur, encoding="utf-8")).get("pr") or {})
     if loaded.get("headSha") and loaded["headSha"] != head_sha:
         warnings.append(f"The pull request has new commits since it was loaded ({loaded['headSha'][:7]} -> {head_sha[:7]}). "
-                        "Line numbers may have moved: reload it in the page and check your notes before posting.")
+                        "Line numbers may have moved: reload it in the page and check your comments before posting.")
 
     prefix = f"{repo}#{number}:"
     notes = [n for n in load(a.data, "notes") if str(n.get("scope", "")).startswith(prefix)]
@@ -209,10 +210,10 @@ def make_plan(a):
 def describe(plan):
     c = plan["counts"]
     out = [f"Review for {plan['repo']}#{plan['number']} (branch {plan['headRef']}):"]
-    if c["comment"]: out.append(f"  {plural(c['comment'], 'note')} on changed lines -> review comments")
+    if c["comment"]: out.append(f"  {plural(c['comment'], 'comment')} on changed lines -> review comments")
     if c["suggest"]: out.append(f"  {plural(c['suggest'], 'edit')} on changed lines -> suggested changes")
     if c["commit"]: out.append(f"  {plural(c['commit'], 'edit')} on changed lines -> committed")
-    if c["commit-marker"]: out.append(f"  {plural(c['commit-marker'], 'note')} on unchanged lines -> marker committed, comment on it")
+    if c["commit-marker"]: out.append(f"  {plural(c['commit-marker'], 'comment')} on unchanged lines -> marker committed, comment on it")
     if c["commit-comment"]: out.append(f"  {plural(c['commit-comment'], 'edit')} on unchanged lines -> committed, comment on it")
     if c["summary"]: out.append(f"  {plural(c['summary'], 'item')} -> listed in the review summary")
     if plan["commitItems"]:
@@ -223,7 +224,8 @@ def describe(plan):
     out.append("Items:")
     for x in sorted(plan["actions"], key=lambda x: (x["path"], x["line"])):
         what = x["text"] if x["source"] == "note" else ("-> " + " / ".join(x["new"]) if x.get("new") else x["text"])
-        out.append(f"  [{labels[x['do']]}] {x['path']}:{x['line']} {x['source']}: {what}")
+        kind = "comment" if x["source"] == "note" else "edit"
+        out.append(f"  [{labels[x['do']]}] {x['path']}:{x['line']} {kind}: {what}")
     for w in plan["warnings"]:
         out.append("  WARNING: " + w)
     return "\n".join(out)
@@ -293,7 +295,7 @@ def wait_for_head(repo, number, sha, tries=15):
             return
         time.sleep(2)
     raise SystemExit(f"Committed {sha[:7]} to the branch, but the pull request did not show it yet, so no comments were posted. "
-                     "Make a new plan from the notes that were not posted (the committed items are already on the branch).")
+                     "Make a new plan from the comments that were not posted (the committed items are already on the branch).")
 
 
 def execute(plan_path, repo_dir=None):
@@ -328,7 +330,7 @@ def execute(plan_path, repo_dir=None):
         ops_all = [o for ops in by_path.values() for o in ops]
         n_edit = sum(1 for o in ops_all if o[3]["source"] == "edit")
         n_note = len(ops_all) - n_edit
-        msg = "Review: " + ", ".join(p for p in [plural(n_edit, "edit") if n_edit else "", plural(n_note, "note marker") if n_note else ""] if p)
+        msg = "Review: " + ", ".join(p for p in [plural(n_edit, "edit") if n_edit else "", plural(n_note, "comment marker") if n_note else ""] if p)
         msg += f"\n\nCommitted from a Read-Along review of #{number}:\n" + "\n".join(f"- {p}" for p in sorted(new_files))
         if os.environ.get("READALONG_COMMIT_TRAILER"):  # attribution lines, supplied by the session that posts
             msg += "\n\n" + os.environ["READALONG_COMMIT_TRAILER"]
@@ -383,12 +385,12 @@ def execute(plan_path, repo_dir=None):
         comments = kept
         summary_items += failed
 
-    body = ["Review notes from a Read-Along listening review."]
+    body = ["Review from a Read-Along listening review."]
     if commits:
         body.append("\n**Committed during review**")
         body += [f"- `{c['path']}`: {c['url']}" for c in commits]
     if summary_items:
-        body.append("\n**Notes and edits on lines outside the diff**")
+        body.append("\n**Comments and edits on lines outside the diff**")
         for x in summary_items:
             if x["source"] == "note":
                 body.append(f"- `{x['path']}` line {x['line']}: {x['text']}" + (f"\n  > {x['anchor']}" if x.get("anchor") else ""))

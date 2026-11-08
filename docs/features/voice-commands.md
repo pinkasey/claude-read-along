@@ -14,7 +14,7 @@ The page cannot use the microphone itself (see [product.md](../product.md#platfo
 
 ## Running a command
 
-- A short command runs after about one second without new text. A note or an edit waits about three seconds, so a pause in mid-sentence does not cut it off; the line under the box shows what will be saved.
+- A short command runs after about one second without new text. A comment or an edit waits about three seconds, so a pause in mid-sentence does not cut it off; the line under the box shows what will be saved.
 - Enter runs the command at once.
 - Dictation's punctuation and capitals are ignored ("Next." works), as are leading fillers such as "please", "OK", "um".
 - An unknown command is shown back ("Didn't recognise …") and nothing happens.
@@ -33,20 +33,20 @@ The page cannot use the microphone itself (see [product.md](../product.md#platfo
 | | go to line N | Read from the section at line N |
 | | from the top | Read from the start |
 | Pull request | next change, previous change | The start of the next or previous run of changed sections |
-| | next comment | The next section with a review comment (bots excluded) |
+| | next comment | The next section with a review comment (bots excluded) or one of your comments |
 | | next file, previous file | Switch file |
-| Notes | add note TEXT (also: note, comment, make a note) | Save TEXT as a note |
-| | note (alone) | Open the note box to type |
+| Comments | add comment TEXT (also: comment, add note, note) | Save TEXT as your comment |
+| | comment (alone) | Open the comment box to type |
 | Edits | change X to Y (also: replace X with Y) | Propose replacing X with Y in the section |
 | | edit INSTRUCTION (also: rewrite, fix) | Ask Claude to apply INSTRUCTION to the section, and propose the result |
 | | edit (alone) | Open the edit box to type |
 | | accept, yes, save / cancel, no, discard | Accept or drop the proposed edit |
-| | undo | Remove the last note or edit made by voice |
+| | undo | Remove the last comment or edit made by voice |
 | Help | commands, help | Show the command list |
 
 ## Which section a command applies to
 
-Notes and edits apply to the section that was being read when the reviewer **started** dictating, even if reading has moved on since.
+Comments and edits apply to the section that was being read when the reviewer **started** dictating, even if reading has moved on since.
 
 ## Proposed edits
 

@@ -13,18 +13,18 @@ GitHub accepts review comments only on lines inside the pull request's diff (cha
 | Setting | Built-in default | Alternative |
 | --- | --- | --- |
 | **Edits on changed lines** | **Suggest edits**: review comments with suggested changes, which the author applies with one click | **Commit inline**: Claude commits the edits to the pull request's branch |
-| **Notes and edits on unchanged lines** | **List in the summary**: nothing is committed; they go in the review summary with their line numbers | **Commit and comment**: Claude commits a marker for a note, or the edited text for an edit, and comments on it |
+| **Comments and edits on unchanged lines** | **List in the summary**: nothing is committed; they go in the review summary with their line numbers | **Commit and comment**: Claude commits a marker for a comment, or the edited text for an edit, and comments on it |
 
 - Each person's choice is saved as their own default, privately, and follows them across devices. Without a saved choice, the built-in defaults apply.
-- The **Post review** panel shows the settings, and the plan: how many notes and edits go where.
+- The **Post review** panel shows the settings, and the plan: how many comments and edits go where.
 
 ## What happens to each item
 
 | Item | Where | Result |
 | --- | --- | --- |
-| Note | Inside the diff | A review comment on its line |
-| Note | Outside the diff, **List in the summary** | Listed in the review summary with its file, line and the section's first words |
-| Note | Outside the diff, **Commit and comment** | A `<!-- review note -->` line is committed right after the section (indented to stay inside a list item), and the note is posted as a comment on that line. The comment ends with a short explanation and an empty suggested change, so the author removes the marker with one click (**Commit suggestion**). The page does not read the explanation aloud. |
+| Comment | Inside the diff | A review comment on its line |
+| Comment | Outside the diff, **List in the summary** | Listed in the review summary with its file, line and the section's first words |
+| Comment | Outside the diff, **Commit and comment** | A `<!-- review comment -->` line is committed right after the section (indented to stay inside a list item), and the comment is posted as a comment on that line. The comment ends with a short explanation and an empty suggested change, so the author removes the marker with one click (**Commit suggestion**). The page does not read the explanation aloud. |
 | Edit | Inside the diff, **Suggest edits** | A suggested change replacing the section's lines |
 | Edit | Inside the diff, **Commit inline** | Committed to the branch; listed under "Committed during review" in the summary |
 | Edit | Outside the diff, **List in the summary** | Listed in the summary with the suggested text |
@@ -50,4 +50,4 @@ Everything goes into one review (state "comment"; never "approve" or "request ch
 
 ## After posting
 
-Claude reports the review's link and the commits, removes the posted notes and edits from the page, and reloads the pull request, so the posted comments appear as review comments.
+Claude reports the review's link and the commits, removes the posted comments and edits from the page, and reloads the pull request, so the posted comments appear as review comments.

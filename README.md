@@ -1,6 +1,6 @@
 # claude-read-along
 
-Code-review markdown files with Claude, by listening. A review page reads the document aloud section by section, highlights the sentence being spoken, and lets you jump, take notes and make edits, by clicking, by keyboard or by dictated voice commands. Notes and edits stay with the page until you ask Claude to post them to the pull request.
+Code-review markdown files with Claude, by listening. A review page reads the document aloud section by section, highlights the sentence being spoken, and lets you jump, add comments and make edits, by clicking, by keyboard or by dictated voice commands. Comments and edits stay with the page until you ask Claude to post them to the pull request.
 
 It works with a pull request (changed sections, existing review comments, several files) and with plain markdown files.
 
@@ -29,7 +29,7 @@ In the Claude Code app the page can sit in the side pane, next to the chat.
 | On the page alone | Needs a Claude Code session |
 | --- | --- |
 | Listening, navigation, voice commands | Loading a pull request (the page cannot reach GitHub) |
-| Notes and edits | Posting the review, and committing edits |
+| Comments and edits | Posting the review, and committing edits |
 | Opening or pasting a local markdown file | |
 | Edits proposed by voice ("edit make this shorter"), which ask Claude directly from the page | |
 
@@ -39,7 +39,7 @@ The page's **Open pull request** and **Post review** buttons send the request to
 
 1. Load a pull request: press **Open pull request** in the page, or tell Claude in the chat which pull request to review.
 2. Press play, or click any section.
-3. Take notes and make edits as you listen. Claude can read them back at any time.
+3. Add comments and make edits as you listen. Claude can read them back at any time.
 4. Press **Post review** in the page, or tell Claude "post my review". Claude shows what it will post and commit, and acts only after you confirm.
 
 ## Installation
@@ -51,8 +51,8 @@ Packaging as a Claude Code plugin is the next step, and installation instruction
 - Section-by-section reading with sentence highlighting and auto-scroll; click a section to read from there.
 - Outline of headings; chapters with pull-request changes are marked, with counts of review comments.
 - Pull requests: changed sections are marked and announced ("Changed."), a **Changed only** mode skips the rest, and existing review comments are read after their section (bot comments are shown but not read).
-- Notes and edits per file; edits can be proposed by voice ("change 2,000 to 3,000", "edit make this shorter").
-- Voice commands, dictated with the operating system's own dictation (Win+H on Windows, the keyboard microphone on phones), typed into the command box: play, pause, next, back, repeat, faster, slower, next chapter, next change, next comment, next file, go to line N, add note …, undo.
+- Review comments and edits per file; edits can be proposed by voice ("change 2,000 to 3,000", "edit make this shorter").
+- Voice commands, dictated with the operating system's own dictation (Win+H on Windows, the keyboard microphone on phones), typed into the command box: play, pause, next, back, repeat, faster, slower, next chapter, next change, next comment, next file, go to line N, add comment …, undo.
 - Speed 0.8× to 3×, voice choice, keep-screen-on.
 
 ## Posting a review
@@ -62,7 +62,7 @@ GitHub only accepts review comments on lines inside the pull request's diff. Two
 | Setting | Default | Alternative |
 | --- | --- | --- |
 | Edits on changed lines | Suggested changes the author applies with one click | Committed to the pull request branch |
-| Notes and edits on unchanged lines | Listed in the review summary with line numbers | Committed (a `<!-- review note -->` marker for a note, the edited text for an edit), with a review comment on it |
+| Comments and edits on unchanged lines | Listed in the review summary with line numbers | Committed (a `<!-- review comment -->` marker for a comment, the edited text for an edit), with a review comment on it |
 
 Claude always asks before committing anything. Pull requests from forks cannot be committed to, so those items fall back to suggestions or the summary.
 
