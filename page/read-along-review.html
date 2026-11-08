@@ -1,6 +1,6 @@
 <title>Read-Along Review</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="read-along-version" content="0.1.0">
+<meta name="read-along-version" content="0.1.1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&family=Literata:opsz,wght@7..72,400;7..72,600;7..72,700&display=swap">
@@ -131,6 +131,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
 .item .line { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
 .item .quote { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
 .item del { color: var(--muted); }
+.item.orphan { opacity: .85; border-style: dashed; }
 .item ins { text-decoration: none; color: var(--edit); }
 .item .row { display: flex; gap: 6px; }
 .rail-toggle { display: none; }
@@ -632,6 +633,19 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
       }
     });
     items.push('<p class="hint">When you are ready, tell Claude in the chat: “post my review”.</p>');
+    const orph = orphans();
+    if (orph.length && !S.readOnly) {
+      const nc = orph.filter((x) => x.kind === "note").length, ne = orph.length - nc;
+      items.push('<h2>Other documents</h2><p class="hint">' + [nc ? plural(nc, "comment") : "", ne ? plural(ne, "edit") : ""].filter(Boolean).join(" and ") +
+        " from documents that aren't loaded. They can't be shown or posted here: load their document again, or delete them.</p>");
+      orph.forEach((x) => {
+        const v = x.item;
+        items.push('<div class="item ' + x.kind + ' orphan"><div class="head"><span class="kind">' + (x.kind === "note" ? "Comment" : "Edit") + '</span><span class="line">' + esc(scopeLabel(v.scope)) + (v.line ? " · line " + v.line : "") + "</span></div>" +
+          "<div>" + esc(v.text || "") + "</div>" + (v.anchor || v.original ? '<div class="quote">' + esc(v.anchor || v.original) + "</div>" : "") +
+          '<div class="row"><button class="btn small ghost" ' + (x.kind === "note" ? 'data-del-note="' : 'data-del-edit-id="') + esc(v.id) + '">Delete</button></div></div>');
+      });
+      items.push('<div class="row"><button class="btn small" id="delOrphans" data-del-orphans="1">Delete all ' + orph.length + "</button></div>");
+    }
     $("railInner").innerHTML = items.join("");
     markOutline();
   }
@@ -756,6 +770,40 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
       scope: (pr ? pr.repo + "#" + pr.number : "docs") + ":" + f.path,
     };
   }
+  // Scopes the reviewer can reach now: every file of the loaded pull request or document set,
+  // or the single loaded document. Comments and edits in any other scope are listed as "Other documents".
+  function reachableScopes() {
+    const m = S.meta; if (!m) return new Set();
+    if (Array.isArray(m.files)) { const pre = (m.pr ? m.pr.repo + "#" + m.pr.number : "docs") + ":"; return new Set(m.files.map((f) => pre + f.path)); }
+    return new Set([m.docId ? "doc:" + m.docId : ""]);
+  }
+  function orphans() {
+    if (!S.meta) return [];
+    const R = reachableScopes();
+    return S.allNotes.filter((n) => !R.has(n.scope || "")).map((n) => ({ kind: "note", item: n }))
+      .concat(S.allEdits.filter((e) => !R.has(e.scope || "")).map((e) => ({ kind: "edit", item: e })));
+  }
+  function scopeLabel(sc) {
+    sc = sc || "";
+    if (!sc) return "an earlier document";
+    if (sc.startsWith("doc:")) return "an opened or pasted document";
+    const i = sc.indexOf(":"); return sc.slice(0, i).replace("#", " #") + " · " + sc.slice(i + 1);
+  }
+  // A single document saved before documents had an identity: give it one, once, and move its
+  // scope-less comments and edits to it, so nothing stays without a scope.
+  let migrating = false;
+  async function migrateLegacyDoc() {
+    const m = S.meta;
+    if (migrating || S.mode !== "shared" || S.readOnly !== false || !m || Array.isArray(m.files) || m.docId || !m.markdown) return;
+    migrating = true;
+    const id = hashId("legacy|" + (m.loadedAt || "") + "|" + m.markdown.length + "|" + Math.random());
+    try {
+      await S.db.doc("docs/current").update({ docId: id });
+      for (const n of S.allNotes.filter((x) => !x.scope)) await S.db.doc("notes/" + n.id).update({ scope: "doc:" + id });
+      for (const e of S.allEdits.filter((x) => !x.scope)) await S.db.doc("edits/" + e.id).update({ scope: "doc:" + id });
+    } catch {}
+    migrating = false;
+  }
   function applyScope() {
     const sc = S.doc ? S.doc.scope || "" : "";
     S.notes = S.allNotes.filter((n) => (n.scope || "") === sc);
@@ -862,6 +910,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
       if (!snap.metadata.fromCache) { loaded = true; clearTimeout(slow); }
       const before = S.doc && S.doc.markdown;
       S.meta = snap.exists ? snap.data() : null;
+      migrateLegacyDoc();
       composeDoc();
       if (!S.doc || S.doc.markdown !== before) { pause(); S.cur = 0; }
       setDoc();
@@ -921,6 +970,13 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
     if (j) { const i = S.units.findIndex((u) => u.key === j.dataset.jump); if (i >= 0) { S.playing ? speakFrom(i, 0) : setActive(i, true); } $("rail").classList.remove("open"); return; }
     const dn = e.target.closest("[data-del-note]"); if (dn) return deleteNote(dn.dataset.delNote);
     const de = e.target.closest("[data-del-edit]"); if (de) return deleteEdit(de.dataset.delEdit);
+    const di = e.target.closest("[data-del-edit-id]"); if (di) return deleteEditById(di.dataset.delEditId);
+    const da = e.target.closest("[data-del-orphans]");
+    if (da) {
+      if (!da.dataset.armed) { da.dataset.armed = "1"; da.textContent = "Press again to delete them all"; da.classList.add("primary"); return; }
+      da.disabled = true;
+      (async () => { for (const x of orphans()) { if (x.kind === "note") await deleteNote(x.item.id); else await deleteEditById(x.item.id); } toast("Deleted"); })();
+    }
   });
   function openComposer(kind) {
     if (S.readOnly) { toast("Only the page's owner can add comments and edits."); return; }
@@ -1484,6 +1540,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
       const user = window.claude && window.claude.use ? await window.claude.use("user") : null;
       if (user) {
         S.readOnly = !(await user.isOwner());
+        migrateLegacyDoc();
         if (S.readOnly) { $("chipMode").textContent = "View only"; $("noteBtn").disabled = true; $("editBtn").disabled = true; $("loadBtn").hidden = true; $("postBtn").hidden = true; $("openPrBtn").hidden = true; }
       }
       const id = user ? await user.id() : null;

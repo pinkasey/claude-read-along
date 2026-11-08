@@ -33,6 +33,8 @@ Opening a box pauses reading. Saving an edit whose text is unchanged removes any
 - Each section has at most one edit; editing again replaces it.
 - Text typed into a comment or edit box survives the page redrawing (for example when other data arrives) until it is saved or cancelled.
 - **Undo** (voice) removes the most recent comment or edit made by voice, in the file it was made in, even after switching files.
+- Nothing stays hidden: comments and edits whose scope matches no loaded document (an earlier pull request, a pasted document, or items saved before scopes existed) are listed under **Other documents** in the right-hand panel, with where they came from, their text, **Delete** on each, and **Delete all** (a second press confirms). They are not shown in the document or posted. After loading a pull request, Claude reports such items and offers to delete them.
+- A single document saved before documents had an identity gets one when its owner opens it, and its scope-less comments and edits move to it.
 
 ## Where they are kept
 
