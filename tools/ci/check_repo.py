@@ -6,10 +6,11 @@
 - Page safety: every external script loads from an allowed CDN with an integrity hash; stylesheets
   only from Google Fonts.
 - Page version: when the page changed since REF (the pull request's base), its read-along-version
-  must change too, so installed plugins update pages that are already published.
+  must go up, so installed plugins update pages that are already published.
 - Docs links: relative links in markdown files point at files that exist.
 """
 import argparse
+from html.parser import HTMLParser
 import os
 import re
 import subprocess
@@ -18,28 +19,51 @@ import sys
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 PAGE = "page/read-along-review.html"
 SCRIPT_HOSTS = ("https://cdnjs.cloudflare.com/", "https://cdn.jsdelivr.net/npm/", "https://unpkg.com/")
-VERSION = re.compile(r'<meta name="read-along-version" content="(\d+\.\d+\.\d+)">')
 
 
-def attr(tag, name):
-    m = re.search(rf'\b{name}="([^"]*)"', tag)
-    return m.group(1) if m else None
+class Tags(HTMLParser):
+    """Collects <script>, <link> and <meta> elements with their attributes, the way a browser reads
+    them: case, quoting and spacing do not matter, and data-* attributes are not mistaken for others."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.tags = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("script", "link", "meta"):
+            self.tags.append((tag, {k.lower(): (v or "") for k, v in attrs}))
+
+    handle_startendtag = handle_starttag
+
+
+def parse(html):
+    p = Tags()
+    p.feed(html)
+    return p.tags
+
+
+def page_version(html):
+    for tag, a in parse(html):
+        if tag == "meta" and a.get("name") == "read-along-version" and re.fullmatch(r"\d+\.\d+\.\d+", a.get("content", "")):
+            return tuple(int(x) for x in a["content"].split("."))
+    return None
 
 
 def check_page(html):
     errors = []
-    for tag in re.findall(r"<script\b[^>]*\bsrc=[^>]*>", html):
-        src = attr(tag, "src") or ""
-        if not src.startswith(SCRIPT_HOSTS):
-            errors.append(f"script from a host that is not allowed: {src}")
-        if not re.fullmatch(r"sha(256|384|512)-[A-Za-z0-9+/=]+", attr(tag, "integrity") or ""):
-            errors.append(f"script without an integrity hash: {src}")
-        if attr(tag, "crossorigin") != "anonymous":
-            errors.append(f'script without crossorigin="anonymous": {src}')
-    for tag in re.findall(r"<link\b[^>]*>", html):
-        if attr(tag, "rel") == "stylesheet" and not (attr(tag, "href") or "").startswith("https://fonts.googleapis.com/"):
-            errors.append(f"stylesheet from a host that is not allowed: {attr(tag, 'href')}")
-    if not VERSION.search(html):
+    for tag, a in parse(html):
+        if tag == "script" and "src" in a:
+            src = a["src"].strip()
+            if not src.startswith(SCRIPT_HOSTS):
+                errors.append(f"script from a host that is not allowed: {src}")
+            if not re.fullmatch(r"sha(256|384|512)-[A-Za-z0-9+/=]+", a.get("integrity", "").strip()):
+                errors.append(f"script without an integrity hash: {src}")
+            if a.get("crossorigin", "").strip().lower() != "anonymous":
+                errors.append(f'script without crossorigin="anonymous": {src}')
+        if tag == "link" and "stylesheet" in a.get("rel", "").lower().split():
+            if not a.get("href", "").strip().startswith("https://fonts.googleapis.com/"):
+                errors.append(f"stylesheet from a host that is not allowed: {a.get('href')}")
+    if not page_version(html):
         errors.append('the page has no <meta name="read-along-version" content="X.Y.Z">')
     return errors
 
@@ -50,9 +74,11 @@ def check_version(base, html):
         return []  # the page is new on this branch, or the base is unknown
     if old.stdout == html:
         return []
-    was, now = VERSION.search(old.stdout), VERSION.search(html)
-    if was and now and was.group(1) == now.group(1):
-        return [f"{PAGE} changed but read-along-version is still {now.group(1)}: raise it so installed plugins update published pages"]
+    was, now = page_version(old.stdout), page_version(html)
+    if was and now and now <= was:
+        fmt = lambda v: ".".join(map(str, v))
+        return [f"{PAGE} changed but read-along-version went from {fmt(was)} to {fmt(now)}: it must go up, "
+                "or installed plugins never update pages that are already published"]
     return []
 
 
