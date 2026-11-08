@@ -67,6 +67,7 @@ To open the page again without asking Claude: use its link, find it in your arti
 
 - Section-by-section reading, with the sentence being spoken highlighted and kept in view; speed 0.8× to 3×, voice choice, keep the screen awake.
 - Front matter and `<!-- comments -->`, which GitHub hides, are shown on the page; **Read hidden** reads them aloud too.
+- Several reviews on one page: every pull request or repository you load is kept, and a picker switches between them instantly. A Claude session that works on a pull request adds it to your page by itself.
 - An outline of headings; chapters with pull request changes are marked, with counts of review comments.
 - Pull requests: changed sections are marked and announced ("Changed."), **Changed only** skips the rest, and existing review comments are read after their section (bots are shown, not read).
 - Repositories: read the markdown of a repository or folder (any branch) without a pull request. Your first post creates a branch with your edits and comment markers and opens a draft pull request with your comments; later posts go to the same pull request. See [docs/features/repositories.md](docs/features/repositories.md).

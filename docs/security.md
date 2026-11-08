@@ -9,6 +9,8 @@ Read-Along handles text written by other people (pull request markdown and revie
 - Only the page's owner can write its shared data: loaded documents, comments, edits, the reading position, and the session the page sends requests to. Anyone the page is shared with can read it.
 - Each person can write only their own review settings, which nobody else can read.
 - A person viewing someone else's page sees "View only": comment, edit, load and post controls are off.
+- Only the owner can switch the page's shown review or remove a review. A viewer can switch reviews for themselves; that changes nothing stored.
+- Each review's recorded session is written by Claude, like the page's linked session. The page sends requests only to a session recorded in its own data, and never acts on a request itself.
 
 This matters because posting turns the page's comments and edits into review comments and commits under the owner's GitHub account. If other people could write comments, they could post in the owner's name.
 

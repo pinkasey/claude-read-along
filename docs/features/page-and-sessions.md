@@ -20,7 +20,7 @@ Status: **Shipped**, except where marked otherwise
 
 ## How the page asks Claude
 
-- When Claude loads the page, it records its session in the page's database.
+- When Claude loads a review, it records its session with that review, and as the page's linked session. Requests about a review go to the session that loaded it, or to the linked session when the review has none (see [reviews.md](reviews.md)).
 - **Open PR or repo** and **Post review** send the request to that session as a message, through the Claude Code connector. **Known issue:** claude.ai currently refuses this call ("connector access isn't confirmed for this artifact"), even after the permission is requested, so the copy-into-chat route below is the one that works.
 - Before sending, the page checks the reviewer's permission for the connector and, if it has not been given yet, asks for it with claude.ai's permission dialog. If the reviewer declined, the panel offers **Open permissions** (claude.ai's Permissions panel) to turn it back on.
 - When a panel opens, the page checks whether it can message Claude for this person (a linked session, the connector, its send tool) and says so at once if not.
@@ -36,13 +36,14 @@ While reading, the page records the current file, line and section in its databa
 
 | Data | Written by | Read by |
 | --- | --- | --- |
-| The document set: title, pull request, list of files | Claude | Page |
+| Every loaded review: title, pull request or repository, list of files, when it was loaded, the session that loaded it | Claude | Page |
+| Which review is shown | Claude (on loading), page (on switching) | Page, Claude |
 | Each file: markdown, changed lines, diff ranges, review comments | Claude | Page |
 | Comments and edits | Page | Page, Claude (to post) |
 | Current reading position | Page | Claude |
 | The session to send requests to | Claude | Page |
 | Each person's review settings (private to them) | Page | Page, Claude |
-| Speed, voice, toggles, chosen file | Page | Page (browser storage only) |
+| Speed, voice, toggles, chosen file, the place in each review | Page | Page (browser storage only) |
 
 ## Planned
 

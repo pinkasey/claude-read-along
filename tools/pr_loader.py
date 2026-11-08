@@ -2,10 +2,16 @@
 """Prepare documents for the Read-Along Review page.
 
 Writes one JSON file per database document into OUT_DIR:
-  docs/current.json   the document set: title, pull request (if any), list of files
+  reviews/<rid>.json  the review: title, pull request or repository (if any), list of files, the
+                      Claude session that loaded it; the page keeps many and switches between them
   files/<id>.json     one per markdown file: path, status, markdown, changed lines, review comments
+                      (ids start with the review's id, so reviews never share files)
+  docs/current.json   {reviewId}: the review the page shows
 
 Usage:
+Every command takes --session-id ID: the Claude Code session the page should send this review's
+requests to.
+
   pr_loader.py pr OWNER/REPO NUMBER OUT_DIR     markdown files changed in a pull request (needs `gh`)
   pr_loader.py repo OWNER/REPO OUT_DIR [--ref BRANCH] [--path FOLDER] [--review-pr NUMBER]
                                                 markdown files in a repository, without a pull request;
@@ -17,6 +23,7 @@ Claude then writes these files into the page's database (ArtifactData batch with
 """
 import argparse
 import base64
+import hashlib
 import json
 import os
 import re
@@ -78,6 +85,22 @@ def file_id(i, path):
     return f"f{i}-{stem}"
 
 
+def review_id(key):
+    """A review's id: the same pull request, repository folder or file set keeps the same id, so
+    loading it again replaces it instead of adding a copy."""
+    return "r" + hashlib.sha1(key.encode("utf-8")).hexdigest()[:12]
+
+
+def write_review(out_dir, key, review, session_id=None):
+    rid = review_id(key)
+    review = dict(review, id=rid)
+    if session_id:
+        review["sessionId"] = session_id
+    write(out_dir, f"reviews/{rid}.json", review)
+    write(out_dir, "docs/current.json", {"reviewId": rid, "updatedAt": datetime.now(timezone.utc).isoformat()})
+    return rid
+
+
 def write(out_dir, rel, data):
     path = os.path.join(out_dir, rel)
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -126,7 +149,7 @@ def pr_summary(repo, number, pr):
     }
 
 
-def load_pr(repo, number, out_dir):
+def load_pr(repo, number, out_dir, session_id=None):
     pr, md_files, comments = pr_details(repo, number)
     head_sha = pr["head"]["sha"]
 
@@ -137,7 +160,7 @@ def load_pr(repo, number, out_dir):
         patch = f.get("patch")
         added, hunks = parse_patch(patch) if patch else (None, [])
         file_comments = comments.get(path, [])
-        fid = file_id(i, path)
+        fid = review_id(f"{repo}#{number}") + "-" + file_id(i, path)
         write(out_dir, f"files/{fid}.json", {
             "path": path,
             "status": f["status"],  # added | modified | renamed
@@ -154,14 +177,14 @@ def load_pr(repo, number, out_dir):
         })
 
     load_id = f"{repo}#{number}@{head_sha[:12]}"
-    write(out_dir, "docs/current.json", {
+    write_review(out_dir, f"{repo}#{number}", {
         "title": pr["title"],
         "pr": pr_summary(repo, number, pr),
         "files": index,
         "defaultFile": index[0]["id"] if index else None,
         "loadId": load_id,
         "loadedAt": datetime.now(timezone.utc).isoformat(),
-    })
+    }, session_id)
     return index
 
 
@@ -175,7 +198,7 @@ def normalize_folder(path):
     return path
 
 
-def load_repo(repo, out_dir, ref=None, folder="", review_pr=None):
+def load_repo(repo, out_dir, ref=None, folder="", review_pr=None, session_id=None):
     """Markdown files of a repository (optionally one folder), read without a pull request.
 
     With review_pr (the draft pull request a repository review opened), the files are read from its
@@ -210,7 +233,7 @@ def load_repo(repo, out_dir, ref=None, folder="", review_pr=None):
         added, hunks = (parse_patch(f.get("patch")) if f and f.get("patch") else (None, [])) if f else ([], [])
         file_comments = comments.get(path, [])
         status = f["status"] if f else "unchanged"
-        fid = file_id(i, path)
+        fid = review_id(f"{repo}@{ref}:{folder}") + "-" + file_id(i, path)
         write(out_dir, f"files/{fid}.json", {
             "path": path, "status": status, "markdown": markdown,
             "added": added, "hunks": hunks, "comments": file_comments, "headSha": sha,
@@ -222,7 +245,7 @@ def load_repo(repo, out_dir, ref=None, folder="", review_pr=None):
         })
 
     name = repo + (f"/{folder}" if folder else "")
-    write(out_dir, "docs/current.json", {
+    write_review(out_dir, f"{repo}@{ref}:{folder}", {
         "title": name,
         "pr": None,
         "repo": {
@@ -235,46 +258,52 @@ def load_repo(repo, out_dir, ref=None, folder="", review_pr=None):
         "loadId": f"{repo}@{ref}:{folder}@{sha[:12]}",
         "notes": notes,
         "loadedAt": datetime.now(timezone.utc).isoformat(),
-    })
+    }, session_id)
     return index, notes
 
 
-def load_local(out_dir, paths):
+def load_local(out_dir, paths, session_id=None):
     index = []
     for i, path in enumerate(paths):
         with open(path, encoding="utf-8") as f:
             markdown = f.read()
-        fid = file_id(i, os.path.basename(path))
+        fid = review_id("local:" + "|".join(paths)) + "-" + file_id(i, os.path.basename(path))
         write(out_dir, f"files/{fid}.json", {"path": path, "status": "local", "markdown": markdown, "added": None, "hunks": [], "comments": []})
         index.append({"id": fid, "path": path, "status": "local", "changed": 0, "comments": 0})
     with open(paths[0], encoding="utf-8") as fh:
         title = first_heading(fh.read()) or os.path.basename(paths[0])
-    write(out_dir, "docs/current.json", {
+    write_review(out_dir, "local:" + "|".join(paths), {
         "title": title if len(paths) == 1 else f"{title} (+{len(paths) - 1} more)",
         "pr": None, "files": index, "defaultFile": index[0]["id"],
         "loadId": "local:" + "|".join(paths), "loadedAt": datetime.now(timezone.utc).isoformat(),
-    })
+    }, session_id)
     return index
 
 
-if __name__ == "__main__":
+def main(argv):
+    ap = argparse.ArgumentParser(prog="pr_loader.py", usage=__doc__)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    p = sub.add_parser("pr"); p.add_argument("repo"); p.add_argument("number", type=int); p.add_argument("out_dir")
+    r = sub.add_parser("repo"); r.add_argument("repo"); r.add_argument("out_dir")
+    r.add_argument("--ref"); r.add_argument("--path", default=""); r.add_argument("--review-pr", type=int)
+    lo = sub.add_parser("local"); lo.add_argument("out_dir"); lo.add_argument("files", nargs="+")
+    for x in (p, r, lo):
+        x.add_argument("--session-id", help="the Claude Code session this review's requests go to")
+    a = ap.parse_args(argv)
     notes = []
-    if len(sys.argv) >= 5 and sys.argv[1] == "pr":
-        idx = load_pr(sys.argv[2], sys.argv[3], sys.argv[4])
-    elif len(sys.argv) >= 4 and sys.argv[1] == "repo":
-        ap = argparse.ArgumentParser(prog="pr_loader.py repo")
-        ap.add_argument("repo"); ap.add_argument("out_dir")
-        ap.add_argument("--ref"); ap.add_argument("--path", default="")
-        ap.add_argument("--review-pr", type=int)
-        a = ap.parse_args(sys.argv[2:])
-        idx, notes = load_repo(a.repo, a.out_dir, a.ref, a.path, a.review_pr)
-    elif len(sys.argv) >= 4 and sys.argv[1] == "local":
-        idx = load_local(sys.argv[2], sys.argv[3:])
+    if a.cmd == "pr":
+        idx = load_pr(a.repo, a.number, a.out_dir, a.session_id)
+    elif a.cmd == "repo":
+        idx, notes = load_repo(a.repo, a.out_dir, a.ref, a.path, a.review_pr, a.session_id)
     else:
-        sys.exit(__doc__)
+        idx = load_local(a.out_dir, a.files, a.session_id)
     for f in idx:
         print(f"{f['id']}\t{f['status']}\t{f['changed']} changed lines\t{f['comments']} comments\t{f['path']}")
     for n in notes:
         print("NOTE: " + n)
     if not idx:
         print("No markdown files found.")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

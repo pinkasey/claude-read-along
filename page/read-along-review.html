@@ -1,6 +1,6 @@
 <title>Read-Along Review</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="read-along-version" content="0.3.1">
+<meta name="read-along-version" content="0.4.0">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&family=Literata:opsz,wght@7..72,400;7..72,600;7..72,700&display=swap">
@@ -189,7 +189,7 @@ header.top .doc-id { padding-right: 34px; }
 .player .now { padding-right: 38px; }
 /* top panel folded: the title alone; the chevron points down to unfold */
 header.top.folded .wrap { padding-block: 6px; }
-header.top.folded .doc-id .meta, header.top.folded .file-pick, header.top.folded .pending { display: none; }
+header.top.folded .doc-id .meta, header.top.folded .file-pick:not(.review-pick), header.top.folded .pending { display: none; }
 header.top.folded .doc-id h1 { font-size: 15px; white-space: nowrap; text-wrap: nowrap; overflow: hidden; text-overflow: ellipsis; }
 header.top.folded .fold { top: 3px; }
 header.top.folded .fold svg { transform: rotate(180deg); }
@@ -225,6 +225,12 @@ header.top.folded .fold svg { transform: rotate(180deg); }
 .cmd-help .cmd-tip { color: var(--muted); }
 .composer .proposal-hint { font-size: 13px; color: var(--accent); font-weight: 700; }
 /* Pull request context */
+.review-pick { font-weight: 600; }
+.reviews-list { list-style: none; padding: 0; margin: 4px 0 12px; max-height: 40vh; overflow-y: auto; }
+.reviews-list li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+.reviews-list li:first-child { border-top: 0; }
+.reviews-list .rv-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.reviews-list .rv-sub { color: var(--muted); font-size: 13px; }
 .file-pick { margin-top: 6px; max-width: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 4px 8px; font-family: var(--font-mono); font-size: 13px; }
 .doc-id .meta a { color: var(--accent); }
 .unit.changed .gutter { color: var(--edit); font-weight: 500; }
@@ -284,6 +290,8 @@ header.top.folded .fold svg { transform: rotate(180deg); }
     <div class="doc-id">
       <h1 id="docTitle">Read-Along Review</h1>
       <div class="meta" id="docMeta">Loading…</div>
+      <label class="sr" for="reviewPick">Review</label>
+      <select id="reviewPick" class="file-pick review-pick" hidden></select>
       <label class="sr" for="filePick">File</label>
       <select id="filePick" class="file-pick" hidden></select>
     </div>
@@ -410,8 +418,10 @@ header.top.folded .fold svg { transform: rotate(180deg); }
 
   // ---------- state ----------
   const S = {
-    meta: null,           // docs/current: a single document {title, path, markdown}, or {title, pr, files:[...]}
-    files: {},            // files/<id> when the document set has several files (a pull request)
+    meta: null,           // the review being read: a single document {title, path, markdown}, or {title, pr, files:[...]}
+    reviews: {},          // reviews/<id>: every loaded review, kept so the reviewer can switch between them
+    current: null,        // docs/current: {reviewId} naming the review shown (or, before reviews existed, the review itself)
+    files: {},            // files/<id> of all loaded reviews
     fileId: null,         // the file shown now
     doc: null,            // the file being read: {title, path, pr, prUrl, markdown, added, comments, status, scope}
     units: [],
@@ -687,6 +697,15 @@ header.top.folded .fold svg { transform: rotate(180deg); }
     const nc = S.units.reduce((a, u) => a + (u.comments || []).filter((c) => !isBot(c)).length, 0);
     if (nc) meta.push(nc + (nc === 1 ? " comment" : " comments"));
     $("docMeta").innerHTML = meta.join(" · ") || (S.mode === "connecting" ? "Loading…" : "No document");
+    // Review picker: every loaded review, most recently opened first.
+    const rv = reviewList(), rp = $("reviewPick");
+    rp.hidden = rv.length < 2;
+    if (rv.length > 1) {
+      const curId = S.meta && S.meta.id;
+      rp.innerHTML = rv.map((m) => { const n = unpostedIn(m); return '<option value="' + esc(m.id) + '"' + (m.id === curId ? " selected" : "") + ">" + esc(reviewLabel(m)) +
+        (m.loadedAt ? " · loaded " + esc(ago(m.loadedAt)) : "") + (n ? " · " + n + " unposted" : "") + "</option>"; }).join("") +
+        '<option value="__open">Open another, reload or remove…</option>';
+    }
     // File picker for pull requests with several markdown files.
     const files = S.meta && Array.isArray(S.meta.files) ? S.meta.files : [];
     const pick = $("filePick");
@@ -877,6 +896,80 @@ header.top.folded .fold svg { transform: rotate(180deg); }
   // repository review (owner/repo@branch, which keeps its scope after its review pull request exists),
   // or a loaded document set.
   function scopeBase(m) { return m.repo ? m.repo.repo + "@" + m.repo.ref : m.pr ? m.pr.repo + "#" + m.pr.number : "docs"; }
+  // ---------- reviews: every loaded review is kept; docs/current names the one shown ----------
+  function reviewList() {
+    const opened = (r) => Math.max(Date.parse(r.loadedAt || "") || 0, ls.get("opened:" + r.id, 0));
+    return Object.values(S.reviews).sort((a, b) => opened(b) - opened(a));
+  }
+  function reviewLabel(m) {
+    if (m.pr) return m.pr.repo + " #" + m.pr.number + (m.title ? " · " + m.title : "");
+    if (m.repo) return m.repo.repo + " @ " + m.repo.ref + (m.repo.folder ? ":" + m.repo.folder : "");
+    return m.title || (m.path ? m.path.split("/").pop() : "Document");
+  }
+  function ago(iso) {
+    const t = Date.parse(iso || ""); if (!t) return "";
+    const min = Math.round((Date.now() - t) / 60000);
+    return min < 1 ? "just now" : min < 60 ? min + " min ago" : min < 1440 ? Math.round(min / 60) + " h ago" : Math.round(min / 1440) + " d ago";
+  }
+  function scopesOf(m) {
+    if (!m) return [];
+    if (Array.isArray(m.files)) { const pre = scopeBase(m) + ":"; return m.files.map((f) => pre + f.path); }
+    return [m.docId ? "doc:" + m.docId : ""];
+  }
+  function unpostedIn(m) {
+    const sc = new Set(scopesOf(m));
+    return S.allNotes.filter((n) => sc.has(n.scope || "")).length + S.allEdits.filter((e) => sc.has(e.scope || "")).length;
+  }
+  // The review a pull request or repository reference names, if it is loaded.
+  function findReview(r) {
+    if (!r) return null;
+    return reviewList().find((m) => r.kind === "pr" ? !!m.pr && m.pr.repo.toLowerCase() === r.repo.toLowerCase() && Number(m.pr.number) === r.number
+      : !!m.repo && m.repo.repo.toLowerCase() === r.repo.toLowerCase() && (!r.ref || m.repo.ref === r.ref) && (m.repo.folder || "") === r.folder) || null;
+  }
+  function refreshMeta() {
+    const c = S.current;
+    S.meta = c && c.reviewId ? S.reviews[c.reviewId] || null : c;
+    migrateLegacyDoc(); migrateToReviews();
+    setDoc();
+  }
+  async function switchReview(id) {
+    if (!S.reviews[id]) return;
+    pause();
+    ls.set("opened:" + id, Date.now());
+    if (S.mode === "shared" && S.readOnly === false) {
+      try { await S.db.doc("docs/current").set({ reviewId: id, updatedAt: new Date().toISOString() }); }
+      catch (e) { toast("Could not switch: " + (e.message || e.code)); }
+    } else { S.current = { reviewId: id }; refreshMeta(); }
+  }
+  // Removes a review and its files. Its unposted comments and edits stay (under "Other documents").
+  async function removeReview(id) {
+    const m = S.reviews[id]; if (!m || S.mode !== "shared" || S.readOnly !== false) return;
+    const n = unpostedIn(m);
+    if (!confirm("Remove " + reviewLabel(m) + " from this page?" + (n ? " Its " + n + " unposted comments and edits are kept, under Other documents." : ""))) return;
+    try {
+      for (const f of m.files || []) await S.db.doc("files/" + f.id).delete();
+      await S.db.doc("reviews/" + id).delete();
+      if (S.current && S.current.reviewId === id) {
+        const next = reviewList().find((r) => r.id !== id);
+        if (next) await S.db.doc("docs/current").set({ reviewId: next.id, updatedAt: new Date().toISOString() });
+        else await S.db.doc("docs/current").delete();
+      }
+      toast("Removed " + reviewLabel(m));
+    } catch (e) { toast("Could not remove it: " + (e.message || e.code)); }
+  }
+  // A review loaded before reviews were kept: move it into reviews, once, so it stays switchable.
+  let movingLegacy = false;
+  async function migrateToReviews() {
+    const c = S.current;
+    if (movingLegacy || S.mode !== "shared" || S.readOnly !== false || !c || c.reviewId || !(Array.isArray(c.files) || c.docId)) return;
+    movingLegacy = true;
+    const id = "r" + hashId("legacy|" + scopeBase(c) + "|" + (c.loadId || c.docId)).slice(0, 12);
+    try {
+      await S.db.doc("reviews/" + id).set(Object.assign({}, c, { id }));
+      await S.db.doc("docs/current").set({ reviewId: id, updatedAt: new Date().toISOString() });
+    } catch {}
+    movingLegacy = false;
+  }
   function composeDoc() {
     const m = S.meta;
     if (!m) { S.doc = null; return; }
@@ -894,12 +987,10 @@ header.top.folded .fold svg { transform: rotate(180deg); }
       scope: scopeBase(m) + ":" + f.path,
     }, where);
   }
-  // Scopes the reviewer can reach now: every file of the loaded pull request or document set,
-  // or the single loaded document. Comments and edits in any other scope are listed as "Other documents".
+  // Scopes the reviewer can reach: every file of every loaded review (switching reaches the others).
+  // Comments and edits in any other scope are listed as "Other documents".
   function reachableScopes() {
-    const m = S.meta; if (!m) return new Set();
-    if (Array.isArray(m.files)) { const pre = scopeBase(m) + ":"; return new Set(m.files.map((f) => pre + f.path)); }
-    return new Set([m.docId ? "doc:" + m.docId : ""]);
+    return new Set(scopesOf(S.meta).concat(...Object.values(S.reviews).map(scopesOf)));
   }
   function orphans() {
     if (!S.meta) return [];
@@ -939,7 +1030,12 @@ header.top.folded .fold svg { transform: rotate(180deg); }
     d.loadedAt = new Date().toISOString();
     d.docId = hashId(d.loadedAt + "|" + (d.path || "") + "|" + d.markdown.length + "|" + Math.random());
     if (S.mode === "shared") {
-      try { await S.db.doc("docs/current").set(d); toast("Document loaded"); } catch (e) { toast("Could not save the document: " + (e.message || e.code)); }
+      const id = "r" + d.docId.slice(0, 12);
+      try {
+        await S.db.doc("reviews/" + id).set(Object.assign({}, d, { id }));
+        await S.db.doc("docs/current").set({ reviewId: id, updatedAt: new Date().toISOString() });
+        toast("Document loaded");
+      } catch (e) { toast("Could not save the document: " + (e.message || e.code)); }
     } else { S.meta = d; S.allNotes = []; S.allEdits = []; local.persist(); setDoc(); toast("Document loaded"); }
   }
   async function saveNote(u, text) {
@@ -977,6 +1073,7 @@ header.top.folded .fold svg { transform: rotate(180deg); }
   function reportPosition() {
     if (S.mode !== "shared" || S.readOnly) return;
     const u = S.units[S.cur]; if (!u) return;
+    ls.set("at:" + (S.doc.scope || ""), S.cur);
     posPending = { key: u.key, line: u.line, endLine: u.endLine || u.line, index: S.cur, text: unitLabel(u), file: S.doc.path || "", scope: S.doc.scope || "", at: new Date().toISOString() };
     clearTimeout(posTimer);
     posTimer = setTimeout(flushPosition, 1200);
@@ -997,7 +1094,7 @@ header.top.folded .fold svg { transform: rotate(180deg); }
     if (ident !== lastMd) {
       const sameDoc = lastMd !== null && lastMd.split("\u0000")[0] === (S.doc && S.doc.scope || "") && S.units.length;
       S.units = md ? buildUnits(md) : []; lastMd = ident;
-      if (!sameDoc) { pause(); S.cur = 0; S.sentence = 0; proposal = null; S.composer = null; }
+      if (!sameDoc) { pause(); S.cur = Math.max(0, Number(ls.get("at:" + (S.doc && S.doc.scope || ""), 0)) || 0); S.sentence = 0; proposal = null; S.composer = null; }
       if (S.cur >= S.units.length) S.cur = 0;
     }
     annotateUnits();
@@ -1034,19 +1131,17 @@ header.top.folded .fold svg { transform: rotate(180deg); }
     const slow = setTimeout(() => { if (!loaded) $("docMeta").textContent = "Still waiting for saved data… it may be out of date."; }, 10000);
     db.doc("docs/current").onSnapshot((snap) => {
       if (!snap.metadata.fromCache) { loaded = true; clearTimeout(slow); }
-      const before = S.doc && S.doc.markdown;
-      S.meta = snap.exists ? snap.data() : null;
-      migrateLegacyDoc();
-      composeDoc();
-      if (!S.doc || S.doc.markdown !== before) { pause(); S.cur = 0; }
-      setDoc();
+      S.current = snap.exists ? snap.data() : null;
+      refreshMeta();
     }, (e) => { loaded = true; clearTimeout(slow); toast("Saved data is unavailable (" + e.code + ")."); });
+    db.collection("reviews").onSnapshot((snap) => {
+      const m = {}; snap.docs.forEach((d) => (m[d.id] = Object.assign({ id: d.id }, d.data())));
+      S.reviews = m;
+      refreshMeta();
+    }, () => {});
     db.collection("files").onSnapshot((snap) => {
       const m = {}; snap.docs.forEach((d) => (m[d.id] = d.data()));
       S.files = m;
-      const before = S.doc && S.doc.markdown;
-      composeDoc();
-      if (S.doc && S.doc.markdown !== before) { pause(); S.cur = 0; }
       setDoc();
     }, () => {});
     db.collection("notes").orderBy("line").onSnapshot((snap) => {
@@ -1160,6 +1255,11 @@ header.top.folded .fold svg { transform: rotate(180deg); }
       if (id === "wakeChk" && !$(id).checked) releaseWake();
       if (id === "changedChk") { render(); if ($(id).checked && !readable(S.cur)) { const n = nextReadable(S.cur, 1); if (n >= 0) goTo(n); } }
     });
+  });
+  $("reviewPick").addEventListener("change", () => {
+    const v = $("reviewPick").value;
+    if (v === "__open") { renderHeader(); openPrPanel(); return; }
+    switchReview(v);
   });
   $("filePick").addEventListener("change", () => {
     pause();
@@ -1491,12 +1591,15 @@ header.top.folded .fold svg { transform: rotate(180deg); }
   S.reviewSettings = Object.assign({}, REVIEW_DEFAULTS, ls.get("reviewSettings", {}));
   S.settingsRef = null;
   S.sessionId = null;
+  // Requests about a review go to the Claude session that loaded it; else to the page's linked session.
+  const sessionFor = () => (S.meta && typeof S.meta.sessionId === "string" && S.meta.sessionId) || S.sessionId;
   let mcpP = null;
   const getMcp = () => (mcpP = mcpP || (window.claude && window.claude.use ? window.claude.use("mcp") : Promise.resolve(null)).catch(() => null));
   async function sendToClaude(message, statusEl, btn) {
     const say = (t, k) => { statusEl.textContent = t; statusEl.className = "status" + (k ? " " + k : ""); };
     const mcp = await getMcp();
-    if (!mcp || !S.sessionId) { say("This page can't message Claude directly here. Copy the sentence above into the chat.", "warn"); return false; }
+    const sessionId = sessionFor();
+    if (!mcp || !sessionId) { say("This page can't message Claude directly here. Copy the sentence above into the chat.", "warn"); return false; }
     // Ask for the connector permission explicitly first. Leaving it to the call's own prompt
     // failed with "connector access isn't confirmed for this artifact".
     const perm = await connectorPermission(true);
@@ -1504,7 +1607,7 @@ header.top.folded .fold svg { transform: rotate(180deg); }
     if (perm === "unavailable") { say("The Claude Code connector can't be used from this page for you. Copy the sentence above into the chat.", "warn"); return false; }
     say("Sending to Claude…");
     try {
-      await mcp.callTool("Claude Code Remote", "send_message", { session_id: S.sessionId, message });
+      await mcp.callTool("Claude Code Remote", "send_message", { session_id: sessionId, message });
       say("Sent. Claude is working on it in the chat.", "ok");
       if (btn) btn.dataset.label && (btn.textContent = btn.dataset.label);
       return true;
@@ -1550,14 +1653,14 @@ header.top.folded .fold svg { transform: rotate(180deg); }
   // When a panel opens, say up front if this page can't message Claude for this person.
   async function checkConnector(statusEl, btn) {
     const mcp = await getMcp();
-    if (!mcp) { statusEl.textContent = "This page can't message Claude here. Copy the sentence above into the chat."; statusEl.className = "status warn"; btn.disabled = true; return; }
-    if (!S.sessionId) { statusEl.textContent = "No Claude session is linked to this page yet. Copy the sentence above into a chat with Claude."; statusEl.className = "status warn"; btn.disabled = true; return; }
+    if (!mcp) { statusEl.textContent = "This page can't message Claude here. Copy the sentence above into the chat."; statusEl.className = "status warn"; btn.disabled = true; btn.dataset.noSend = "1"; return; }
+    if (!sessionFor()) { statusEl.textContent = "No Claude session is linked to this page yet. Copy the sentence above into a chat with Claude."; statusEl.className = "status warn"; btn.disabled = true; btn.dataset.noSend = "1"; return; }
     try {
       const r = await mcp.listTools("Claude Code Remote");
       const srv = (r.servers || [])[0];
-      if (!srv) { statusEl.textContent = "The Claude Code connector isn't available to this page for you. Copy the sentence above into the chat."; statusEl.className = "status warn"; btn.disabled = true; return; }
+      if (!srv) { statusEl.textContent = "The Claude Code connector isn't available to this page for you. Copy the sentence above into the chat."; statusEl.className = "status warn"; btn.disabled = true; btn.dataset.noSend = "1"; return; }
       const known = srv.authStatus !== "unknown";
-      if (known && !srv.tools.some((t) => t.name === "send_message")) { statusEl.textContent = "Your Claude Code connector doesn't let pages send messages. Copy the sentence above into the chat."; statusEl.className = "status warn"; btn.disabled = true; return; }
+      if (known && !srv.tools.some((t) => t.name === "send_message")) { statusEl.textContent = "Your Claude Code connector doesn't let pages send messages. Copy the sentence above into the chat."; statusEl.className = "status warn"; btn.disabled = true; btn.dataset.noSend = "1"; return; }
       if (srv.authStatus === "needs_reauth") { statusEl.textContent = "The Claude Code connector needs you to sign in again (Settings, Connectors). Meanwhile, copy the sentence above into the chat."; statusEl.className = "status warn"; }
       const perm = await connectorPermission(false);
       if (perm === "denied") { statusEl.textContent = "This page isn't allowed to message Claude."; statusEl.className = "status warn"; offerPermissions(statusEl); return; }
@@ -1608,27 +1711,52 @@ header.top.folded .fold svg { transform: rotate(180deg); }
     openPanel((p) => {
       const m0 = S.meta;
       const cur = m0 && m0.pr ? m0.pr.repo + "#" + m0.pr.number : m0 && m0.repo ? m0.repo.repo + "@" + m0.repo.ref + (m0.repo.folder ? ":" + m0.repo.folder : "") : "";
-      p.innerHTML = '<h2 id="panelTitle">Open a pull request or a repository</h2>' +
+      p.innerHTML = '<h2 id="panelTitle">Open a review</h2>' +
         "<p>A pull request: Claude loads its markdown files, what changed, and its review comments. " +
         "A repository: Claude loads its markdown files (from a branch, optionally one folder) to read without a pull request; when you post your review, Claude opens a draft pull request for it.</p>" +
         '<div class="field"><label for="prRef">Pull request or repository</label><input type="text" id="prRef" autocomplete="off" spellcheck="false" placeholder="owner/repo#12, or owner/repo@main:docs" value="' + esc(cur) + '"></div>' +
         '<div class="say"><span id="prSay"></span></div>' +
         '<div class="row"><button class="btn primary" id="prGo">Ask Claude to load it</button><button class="btn" id="prClose">Close</button></div>' +
-        '<div class="status" id="prStatus" aria-live="polite"></div>';
-      const sayEl = p.querySelector("#prSay"), sayBox = p.querySelector(".say");
+        '<div class="status" id="prStatus" aria-live="polite"></div>' +
+        '<div id="rvBox"></div>';
+      const sayEl = p.querySelector("#prSay"), sayBox = p.querySelector(".say"), go = p.querySelector("#prGo");
+      let found = null;
       const update = () => {
         const r = parseRef(p.querySelector("#prRef").value);
+        found = findReview(r);
+        const here = found && S.meta && found.id === S.meta.id;
+        go.textContent = found && !here ? "Switch to it" : here ? "Ask Claude to reload it" : "Ask Claude to load it";
+        go.disabled = found && !here ? false : go.dataset.noSend === "1"; // switching needs no Claude
         sayEl.textContent = r ? loadSentence(r) : "Enter a pull request (owner/repo#12, or its link) or a repository (owner/repo, owner/repo@branch:folder).";
         const old = sayBox.querySelector("button"); if (old) old.remove();
         if (r) sayBox.appendChild(copyBtn(sayEl.textContent));
         return r;
       };
+      const listReviews = () => {
+        const rv = reviewList(), box = p.querySelector("#rvBox");
+        if (!rv.length) { box.innerHTML = ""; return; }
+        const owner = S.mode === "shared" && S.readOnly === false;
+        box.innerHTML = "<h3>Your reviews</h3><p class=\"rv-sub\">Loaded on this page. Switching is instant; reload one to get its latest commits.</p>" +
+          '<ul class="reviews-list">' + rv.map((m) => {
+            const n = unpostedIn(m), here = S.meta && m.id === S.meta.id;
+            return '<li><div class="rv-text">' + esc(reviewLabel(m)) + '<div class="rv-sub">' + [m.loadedAt ? "loaded " + esc(ago(m.loadedAt)) : "", n ? n + " unposted" : "", here ? "open now" : ""].filter(Boolean).join(" · ") + "</div></div>" +
+              (here ? "" : '<button class="btn small" data-rv-open="' + esc(m.id) + '">Open</button>') +
+              (owner ? '<button class="btn small" data-rv-remove="' + esc(m.id) + '" aria-label="Remove ' + esc(reviewLabel(m)) + '">Remove</button>' : "") + "</li>";
+          }).join("") + "</ul>";
+      };
+      listReviews();
+      p.querySelector("#rvBox").addEventListener("click", async (e) => {
+        const o = e.target.closest("[data-rv-open]"), rm = e.target.closest("[data-rv-remove]");
+        if (o) { closePanel(); await switchReview(o.dataset.rvOpen); }
+        if (rm) { await removeReview(rm.dataset.rvRemove); setTimeout(() => { listReviews(); update(); }, 60); }
+      });
       update();
       p.querySelector("#prRef").addEventListener("input", update);
       p.querySelector("#prRef").addEventListener("keydown", (e) => { if (e.key === "Enter") p.querySelector("#prGo").click(); });
       p.querySelector("#prClose").addEventListener("click", closePanel);
       p.querySelector("#prGo").addEventListener("click", async () => {
         const r = update(), st = p.querySelector("#prStatus");
+        if (found && !(S.meta && found.id === S.meta.id)) { closePanel(); await switchReview(found.id); return; }
         if (!r) { st.textContent = "That doesn't look like a pull request or a repository."; st.className = "status warn"; return; }
         await sendToClaude("[Read-Along page] " + sayEl.textContent, st, p.querySelector("#prGo"));
       });
@@ -1640,7 +1768,7 @@ header.top.folded .fold svg { transform: rotate(180deg); }
   function computePlan() {
     const m = S.meta; if (!m || !(m.pr || m.repo)) return null;
     const prefix = scopeBase(m) + ":";
-    const byPath = {}; Object.values(S.files).forEach((f) => (byPath[f.path] = f));
+    const byPath = {}; (m.files || []).forEach((x) => { const f = S.files[x.id]; if (f) byPath[f.path] = f; });
     const inDiff = (path, a, b) => { const f = byPath[path]; return !!(f && Array.isArray(f.hunks) && f.hunks.some((h) => h[0] <= a && h[1] >= b)); };
     const notes = S.allNotes.filter((n) => (n.scope || "").startsWith(prefix));
     const edits = S.allEdits.filter((e) => (e.scope || "").startsWith(prefix));

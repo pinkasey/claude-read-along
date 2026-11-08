@@ -11,7 +11,8 @@
 
 DIR holds the page's comments and edits as exported from its database (comments are stored in its
 "notes" collection): DIR/notes/*.json, DIR/edits/*.json,
-and DIR/docs/current.json (to check the pull request has not moved since it was loaded).
+and DIR/docs/current.json with the review it names, DIR/reviews/<id>.json (to check the pull request
+has not moved since it was loaded).
 
 `plan` changes nothing. It prints what would happen and writes the plan.
 `execute` commits (when the plan says so) and posts one review with all the comments.
@@ -165,6 +166,14 @@ def make_plan(a):
     if os.path.exists(cur):
         with open(cur, encoding="utf-8") as fh:
             loaded = json.load(fh)
+        # docs/current names the review the page shows; the review itself is in reviews/<id>.
+        rid = loaded.get("reviewId")
+        if isinstance(rid, str) and re.fullmatch(r"r[0-9a-f]{12}", rid):
+            rev = os.path.join(a.data, "reviews", rid + ".json")
+            loaded = {}
+            if os.path.exists(rev):
+                with open(rev, encoding="utf-8") as fh:
+                    loaded = json.load(fh)
     if getattr(a, "repo", None):
         # A repository review: files read without a pull request, posted to a review pull request.
         repo, ref, folder = a.repo, a.ref, normalize_folder(a.folder)
