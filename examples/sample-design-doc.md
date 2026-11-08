@@ -4,7 +4,7 @@ Status: Draft for review. Owner: Platform team. Last updated: November 2026.
 
 ## Background
 
-Today the public API applies one global rate limit of 2,000 requests per second, shared by every tenant. When a single large tenant runs a bulk import, smaller tenants see 429 errors even though they are well under any reasonable quota. Support logged 41 tickets about this in the last quarter.
+Today the public API applies one global rate limit of 3,000 requests per second, shared by every tenant. When a single large tenant runs a bulk import, smaller tenants see 429 errors even though they are well under any reasonable quota. Support logged 41 tickets about this in the last quarter.
 
 This document proposes replacing the global limit with per-tenant limits, enforced at the gateway, with a small shared burst pool.
 
@@ -13,6 +13,7 @@ This document proposes replacing the global limit with per-tenant limits, enforc
 - Isolate tenants from each other so one tenant's traffic spike cannot starve the rest.
 - Let us sell higher limits as part of the Enterprise plan.
 - Keep added latency under 2 ms at the 99th percentile.
+- Give every tenant a dashboard that shows its current usage against its limit.
 - Roll out without any client-side changes.
 
 ## Non-goals
@@ -51,7 +52,7 @@ return 1
 
 ### Failure behaviour
 
-If Redis is unreachable, the gateway fails open and allows the request. We chose this because a Redis outage should not take down the whole API. The risk is that during an outage no tenant is limited at all.
+If Redis is unreachable, the gateway falls back to a per-node limit kept in memory, set to the tenant's limit divided by the number of gateway nodes. This keeps tenants roughly isolated during an outage without making Redis a single point of failure.
 
 1. The gateway logs a warning on the first failure.
 2. After 30 seconds of failures it pages the on-call engineer.
@@ -71,6 +72,7 @@ If Redis is unreachable, the gateway fails open and allows the request. We chose
   - If yes, who is allowed to change it?
   - Should overrides expire automatically?
 - How do we communicate the new limits to existing customers?
+- Should limits apply per region, or globally across all regions?
 
 ## Checklist before approval
 
