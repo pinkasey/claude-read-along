@@ -9,6 +9,7 @@ These documents describe how Read-Along behaves: what it is for, what each part 
 | [features/voice-commands.md](features/voice-commands.md) | The command box, voice mode, and every command |
 | [features/comments-and-edits.md](features/comments-and-edits.md) | The reviewer's comments and edits: where they attach, how they are kept apart per document, undo |
 | [features/pull-requests.md](features/pull-requests.md) | Loading a pull request: files, changed sections, existing review comments |
+| [features/repositories.md](features/repositories.md) | Reading a repository or folder without a pull request, and the review pull request opened when posting |
 | [features/posting-reviews.md](features/posting-reviews.md) | Posting a review: the two settings, what gets commented or committed, confirmation |
 | [features/page-and-sessions.md](features/page-and-sessions.md) | Where the page lives, what needs a Claude session, how the page and Claude talk, stored data |
 | [features/plugin.md](features/plugin.md) | The Claude Code plugin: installing, requirements, what the skill does, disclaimer |

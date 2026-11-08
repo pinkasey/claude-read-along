@@ -21,7 +21,7 @@ Status: **Shipped**, except where marked otherwise
 ## How the page asks Claude
 
 - When Claude loads the page, it records its session in the page's database.
-- **Open pull request** and **Post review** send the request to that session as a message, through the Claude Code connector. **Known issue:** claude.ai currently refuses this call ("connector access isn't confirmed for this artifact"), even after the permission is requested, so the copy-into-chat route below is the one that works.
+- **Open PR or repo** and **Post review** send the request to that session as a message, through the Claude Code connector. **Known issue:** claude.ai currently refuses this call ("connector access isn't confirmed for this artifact"), even after the permission is requested, so the copy-into-chat route below is the one that works.
 - Before sending, the page checks the reviewer's permission for the connector and, if it has not been given yet, asks for it with claude.ai's permission dialog. If the reviewer declined, the panel offers **Open permissions** (claude.ai's Permissions panel) to turn it back on.
 - When a panel opens, the page checks whether it can message Claude for this person (a linked session, the connector, its send tool) and says so at once if not.
 - If sending fails, the panel shows the reason and the connector's details. For failures that can be retried, the button changes to **Try again**; the page never retries by itself, because a failed send may still have arrived.

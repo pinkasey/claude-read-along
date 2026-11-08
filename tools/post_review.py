@@ -3,6 +3,10 @@
 
   post_review.py plan    --pr OWNER/REPO NUMBER --data DIR [--edit-mode suggest|commit] [--outside summary|anchor]
                          [--revert-comments on|off] --out PLAN.json
+  post_review.py plan    --repo OWNER/REPO --ref BRANCH [--folder DIR] [--review-pr NUMBER] [--branch NAME] ...
+                         a review of a repository's markdown, read without a pull request: without
+                         --review-pr the plan creates a branch, commits, and opens a draft pull request;
+                         with it, the review goes to that pull request
   post_review.py execute --plan PLAN.json --out RESULT.json [--repo-dir CLONE]
 
 DIR holds the page's comments and edits as exported from its database (comments are stored in its
@@ -134,28 +138,71 @@ def plural(n, word):
 
 
 # ---------------------------------------------------------------- plan
+def normalize_folder(folder):
+    folder = (folder or "").strip().strip("/")
+    if ".." in folder.split("/"):
+        raise SystemExit("The folder must be inside the repository.")
+    return folder
+
+
+def repo_md_paths(repo, sha, folder):
+    """The markdown files in a repository folder at a commit, read from GitHub: the only files a
+    repository review may comment on or commit to."""
+    tree = gh(f"repos/{repo}/git/trees/{sha}?recursive=1")
+    prefix = folder + "/" if folder else ""
+    return {e["path"] for e in tree.get("tree", [])
+            if e.get("type") == "blob" and e["path"].lower().endswith(MD_EXT) and e["path"].startswith(prefix)}
+
+
+def review_branch_name():
+    return "read-along/review-" + time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+
+
 def make_plan(a):
-    repo, number = a.pr
-    number = int(number)
-    pr, hunks = pr_state(repo, number)
-    head_sha, head_ref = pr["head"]["sha"], pr["head"]["ref"]
-    same_repo = pr["head"]["repo"] and pr["head"]["repo"]["full_name"] == pr["base"]["repo"]["full_name"]
-    warnings = []
+    warnings, extra = [], {}
     loaded = {}
     cur = os.path.join(a.data, "docs", "current.json")
     if os.path.exists(cur):
         with open(cur, encoding="utf-8") as fh:
-            loaded = json.load(fh).get("pr") or {}
-    if loaded.get("headSha") and loaded["headSha"] != head_sha:
-        warnings.append(f"The pull request has new commits since it was loaded ({loaded['headSha'][:7]} -> {head_sha[:7]}). "
+            loaded = json.load(fh)
+    if getattr(a, "repo", None):
+        # A repository review: files read without a pull request, posted to a review pull request.
+        repo, ref, folder = a.repo, a.ref, normalize_folder(a.folder)
+        number = int(a.review_pr) if a.review_pr else None
+        if number:
+            pr, hunks = pr_state(repo, number)
+            head_sha, head_ref, url = pr["head"]["sha"], pr["head"]["ref"], pr["html_url"]
+        else:
+            head_sha = gh(f"repos/{repo}/commits/{quote(ref, safe='')}")["sha"]
+            head_ref, url, hunks = None, f"https://github.com/{repo}/tree/{quote(ref, safe='/')}", {}
+            extra["create"] = {"base": ref, "branch": a.branch or review_branch_name()}
+        allowed = repo_md_paths(repo, head_sha, folder)
+        same_repo = True
+        prefix = f"{repo}@{ref}:"
+        was = (loaded.get("reviewPr") or {}).get("headSha") or (loaded.get("repo") or {}).get("sha")
+        extra.update(mode="repo", ref=ref, folder=folder)
+        what = "the review pull request" if number else ref
+        not_allowed = "a markdown file in the reviewed folder"
+    else:
+        repo, number = a.pr
+        number = int(number)
+        pr, hunks = pr_state(repo, number)
+        head_sha, head_ref, url = pr["head"]["sha"], pr["head"]["ref"], pr["html_url"]
+        same_repo = pr["head"]["repo"] and pr["head"]["repo"]["full_name"] == pr["base"]["repo"]["full_name"]
+        allowed = set(hunks)
+        prefix = f"{repo}#{number}:"
+        was = (loaded.get("pr") or {}).get("headSha")
+        what = "the pull request"
+        not_allowed = "a markdown file changed by this pull request"
+    if was and was != head_sha:
+        warnings.append(f"{what[0].upper() + what[1:]} has new commits since it was loaded ({was[:7]} -> {head_sha[:7]}). "
                         "Line numbers may have moved: reload it in the page and check your comments before posting.")
 
-    prefix = f"{repo}#{number}:"
     notes = [n for n in load(a.data, "notes") if str(n.get("scope", "")).startswith(prefix)]
     edits = [e for e in load(a.data, "edits") if str(e.get("scope", "")).startswith(prefix)]
-    refused = [x for x in notes + edits if x.get("file") not in hunks or x.get("scope") != prefix + str(x.get("file"))]
+    refused = [x for x in notes + edits if x.get("file") not in allowed or x.get("scope") != prefix + str(x.get("file"))]
     for x in refused:
-        warnings.append(f"Skipped an item for {x.get('file')!r}: it is not a markdown file changed by this pull request.")
+        warnings.append(f"Skipped an item for {x.get('file')!r}: it is not {not_allowed}.")
     notes = [n for n in notes if n not in refused]
     edits = [e for e in edits if e not in refused]
     texts = {}
@@ -200,8 +247,12 @@ def make_plan(a):
         commit_actions = []
 
     committed_lines = sum(len(x["new"]) if x["source"] == "edit" else 1 for x in commit_actions)
+    if extra.get("create") and not commit_actions and actions:
+        extra["blocked"] = ("A new pull request needs at least one commit, and this review has none: its comments go to the "
+                            "summary and it has no edits. Choose \"Commit and comment\" for comments on unchanged lines, or add an edit.")
     plan = {
-        "repo": repo, "number": number, "url": pr["html_url"], "headSha": head_sha, "headRef": head_ref,
+        **extra,
+        "repo": repo, "number": number, "url": url, "headSha": head_sha, "headRef": head_ref,
         "editMode": a.edit_mode, "outside": a.outside, "revertComments": a.revert_comments == "on",
         "actions": actions, "warnings": warnings,
         "counts": {k: sum(1 for x in actions if x["do"] == k) for k in ["comment", "suggest", "commit", "commit-marker", "commit-comment", "summary"]},
@@ -213,7 +264,13 @@ def make_plan(a):
 
 def describe(plan):
     c = plan["counts"]
-    out = [f"Review for {plan['repo']}#{plan['number']} (branch {plan['headRef']}):"]
+    if plan.get("create"):
+        cr = plan["create"]
+        out = [f"New review pull request in {plan['repo']}: branch {cr['branch']} from {cr['base']}, opened as a draft:"]
+    else:
+        out = [f"Review for {plan['repo']}#{plan['number']} (branch {plan['headRef']}):"]
+    if plan.get("blocked"):
+        out.append("  CANNOT POST: " + plan["blocked"])
     if c["comment"]: out.append(f"  {plural(c['comment'], 'comment')} on changed lines -> review comments")
     if c["suggest"]: out.append(f"  {plural(c['suggest'], 'edit')} on changed lines -> suggested changes")
     rv = ", with a one-click revert comment" if plan.get("revertComments", True) else ""
@@ -269,14 +326,19 @@ def git(repo_dir, *args, input=None):
 
 def commit_with_git(repo_dir, repo, plan, new_files, msg):
     """One commit on the pull request branch, made on top of exactly the planned head, pushed as a
-    fast-forward (never forced: if the branch moved, the push is refused)."""
+    fast-forward (never forced: if the branch moved, the push is refused). For a new repository review
+    (plan["create"]), the commit goes on a new branch made from the reviewed branch."""
     origin = git(repo_dir, "remote", "get-url", "origin")
     if not re.search(rf"[/:]{re.escape(repo)}(\.git)?$", origin):
         raise SystemExit(f"{repo_dir} is a clone of {origin}, not {repo}.")
-    branch = plan["headRef"]
-    git(repo_dir, "fetch", "--quiet", "origin", f"+refs/heads/{branch}:refs/remotes/origin/{branch}")
-    if git(repo_dir, "rev-parse", f"refs/remotes/origin/{branch}") != plan["headSha"]:
-        raise SystemExit(f"{branch} has new commits since the plan was made. Make a new plan.")
+    create = plan.get("create")
+    source = create["base"] if create else plan["headRef"]
+    branch = create["branch"] if create else plan["headRef"]
+    git(repo_dir, "fetch", "--quiet", "origin", f"+refs/heads/{source}:refs/remotes/origin/{source}")
+    if git(repo_dir, "rev-parse", f"refs/remotes/origin/{source}") != plan["headSha"]:
+        raise SystemExit(f"{source} has new commits since the plan was made. Make a new plan.")
+    if create and git(repo_dir, "ls-remote", "--heads", "origin", f"refs/heads/{branch}"):
+        raise SystemExit(f"The branch {branch} already exists. Make a new plan.")
     work = tempfile.mkdtemp(prefix="readalong-")
     git(repo_dir, "worktree", "add", "--quiet", "--detach", work, plan["headSha"])
     try:
@@ -308,13 +370,27 @@ def execute(plan_path, repo_dir=None):
     with open(plan_path, encoding="utf-8") as fh:
         plan = json.load(fh)
     repo, number = plan["repo"], plan["number"]
-    pr = gh(f"repos/{repo}/pulls/{number}")
-    if pr["head"]["sha"] != plan["headSha"]:
-        raise SystemExit("The pull request changed since the plan was made. Make a new plan.")
-    _, allowed = pr_state(repo, number)
+    if plan.get("blocked"):
+        raise SystemExit(plan["blocked"])
+    if plan.get("create"):
+        if gh(f"repos/{repo}/commits/{quote(plan['create']['base'], safe='')}")["sha"] != plan["headSha"]:
+            raise SystemExit(f"{plan['create']['base']} changed since the plan was made. Make a new plan.")
+        if not repo_dir:
+            raise SystemExit("Creating a review pull request needs a clone of the repository (--repo-dir).")
+    else:
+        pr = gh(f"repos/{repo}/pulls/{number}")
+        if pr["head"]["sha"] != plan["headSha"]:
+            raise SystemExit("The pull request changed since the plan was made. Make a new plan.")
+    if plan.get("mode") == "repo":
+        allowed = repo_md_paths(repo, plan["headSha"], normalize_folder(plan.get("folder")))
+        what = "are not markdown files in the reviewed folder"
+    else:
+        _, allowed = pr_state(repo, number)
+        what = "this pull request does not change"
     stray = sorted({x["path"] for x in plan["actions"] if x["path"] not in allowed})
-    if stray:  # the plan file was changed, or the pull request's files changed: refuse rather than guess
-        raise SystemExit(f"The plan names files this pull request does not change: {', '.join(stray)}. Make a new plan.")
+    if stray:  # the plan file was changed, or the files changed: refuse rather than guess
+        raise SystemExit(f"The plan names files that {what}: {', '.join(stray)}. Make a new plan.")
+    created = None
     actions = plan["actions"]
     head = plan["headSha"]
     mapping, commits = {}, []
@@ -338,12 +414,15 @@ def execute(plan_path, repo_dir=None):
         n_edit = sum(1 for o in ops_all if o[3]["source"] == "edit")
         n_note = len(ops_all) - n_edit
         msg = "Review: " + ", ".join(p for p in [plural(n_edit, "edit") if n_edit else "", plural(n_note, "comment marker") if n_note else ""] if p)
-        msg += f"\n\nCommitted from a Read-Along review of #{number}:\n" + "\n".join(f"- {p}" for p in sorted(new_files))
+        reviewed = f"#{number}" if number else f"{plan.get('folder') or repo} on {plan['create']['base']}"
+        msg += f"\n\nCommitted from a Read-Along review of {reviewed}:\n" + "\n".join(f"- {p}" for p in sorted(new_files))
         if os.environ.get("READALONG_COMMIT_TRAILER"):  # attribution lines, supplied by the session that posts
             msg += "\n\n" + os.environ["READALONG_COMMIT_TRAILER"]
         if repo_dir:
             head = commit_with_git(repo_dir, repo, plan, new_files, msg)
             commits.append({"path": ", ".join(sorted(new_files)), "sha": head, "url": f"https://github.com/{repo}/commit/{head}"})
+        elif plan.get("create"):
+            raise SystemExit("Creating a review pull request needs a clone of the repository (--repo-dir).")
         else:
             for path, text in new_files.items():  # the contents API makes one commit per file
                 res = gh(contents_url(repo, path), "PUT", {
@@ -352,6 +431,18 @@ def execute(plan_path, repo_dir=None):
                 })
                 head = res["commit"]["sha"]
                 commits.append({"path": path, "sha": head, "url": res["commit"]["html_url"]})
+        if plan.get("create"):
+            cr = plan["create"]
+            folder = plan.get("folder")
+            new_pr = gh(f"repos/{repo}/pulls", "POST", {
+                "title": f"Review of {folder or repo}" + (f" ({cr['base']})" if cr["base"] else ""),
+                "head": cr["branch"], "base": cr["base"], "draft": True,
+                "body": (f"Draft pull request opened from a Read-Along review of `{folder or '/'}` on `{cr['base']}`. "
+                         "The reviewer's edits are committed here, with review comments on them; "
+                         "more may follow as the review continues."),
+            })
+            number = new_pr["number"]
+            created = {"number": number, "url": new_pr["html_url"], "branch": cr["branch"]}
         wait_for_head(repo, number, head)
 
     # Comments, on the lines as they are after the commits.
@@ -410,6 +501,7 @@ def execute(plan_path, repo_dir=None):
         "commit_id": head, "event": "COMMENT", "body": "\n".join(body), "comments": [i["c"] for i in comments],
     })
     return {
+        "pr": created,
         "review": review.get("html_url"), "commits": commits,
         "posted": sorted({x["id"] + "|" + x["source"] for x in actions}),
         "commentCount": len(comments), "summaryCount": len(summary_items),
@@ -421,7 +513,13 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("plan")
-    p.add_argument("--pr", nargs=2, required=True, metavar=("OWNER/REPO", "NUMBER"))
+    target = p.add_mutually_exclusive_group(required=True)
+    target.add_argument("--pr", nargs=2, metavar=("OWNER/REPO", "NUMBER"))
+    target.add_argument("--repo", metavar="OWNER/REPO", help="a repository review (markdown read without a pull request)")
+    p.add_argument("--ref", help="with --repo: the branch that was reviewed")
+    p.add_argument("--folder", default="", help="with --repo: the folder that was reviewed")
+    p.add_argument("--review-pr", type=int, help="with --repo: the review pull request, once it exists")
+    p.add_argument("--branch", help="with --repo: the name of the branch to create (default read-along/review-<time>)")
     p.add_argument("--data", required=True)
     p.add_argument("--edit-mode", choices=["suggest", "commit"], default="suggest")
     p.add_argument("--outside", choices=["summary", "anchor"], default="summary")
@@ -434,6 +532,8 @@ if __name__ == "__main__":
     x.add_argument("--repo-dir", help="a local clone of the repository: commit with git (fetch, commit, push) instead of the contents API")
     a = ap.parse_args()
     if a.cmd == "plan":
+        if a.repo and not a.ref:
+            ap.error("--repo needs --ref (the branch that was reviewed)")
         plan = make_plan(a)
         with open(a.out, "w", encoding="utf-8") as fh:
             json.dump(plan, fh, ensure_ascii=False, indent=1)

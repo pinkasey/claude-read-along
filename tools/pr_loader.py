@@ -7,10 +7,15 @@ Writes one JSON file per database document into OUT_DIR:
 
 Usage:
   pr_loader.py pr OWNER/REPO NUMBER OUT_DIR     markdown files changed in a pull request (needs `gh`)
+  pr_loader.py repo OWNER/REPO OUT_DIR [--ref BRANCH] [--path FOLDER] [--review-pr NUMBER]
+                                                markdown files in a repository, without a pull request;
+                                                with --review-pr, read from that review pull request's
+                                                branch, with its changes and comments
   pr_loader.py local OUT_DIR FILE.md [FILE.md]  plain markdown files, no pull request
 
 Claude then writes these files into the page's database (ArtifactData batch with file_path).
 """
+import argparse
 import base64
 import json
 import os
@@ -86,36 +91,52 @@ def first_heading(md):
     return m.group(1).strip() if m else ""
 
 
-def load_pr(repo, number, out_dir):
+def comment_record(c):
+    on_new_side = c.get("side", "RIGHT") == "RIGHT"
+    return {
+        "id": str(c["id"]),
+        "author": (c.get("user") or {}).get("login", ""),
+        "isBot": (c.get("user") or {}).get("type") == "Bot",
+        "body": c.get("body", ""),
+        "line": c.get("line") if on_new_side else None,  # None: outdated, or on a deleted line
+        "originalLine": c.get("original_line"),
+        "inReplyTo": str(c["in_reply_to_id"]) if c.get("in_reply_to_id") else None,
+        "createdAt": c.get("created_at", ""),
+        "url": c.get("html_url", ""),
+    }
+
+
+def pr_details(repo, number):
+    """The pull request, its markdown files (path -> GitHub file entry) and its review comments by path."""
     pr = gh(f"repos/{repo}/pulls/{number}")
+    files = {f["filename"]: f for f in gh(f"repos/{repo}/pulls/{number}/files?per_page=100", paginate=True)
+             if f["filename"].lower().endswith(MD_EXT) and f["status"] != "removed"}
+    by_path = {}
+    for c in gh(f"repos/{repo}/pulls/{number}/comments?per_page=100", paginate=True):
+        by_path.setdefault(c.get("path"), []).append(comment_record(c))
+    return pr, files, by_path
+
+
+def pr_summary(repo, number, pr):
+    return {
+        "repo": repo, "number": int(number), "url": pr["html_url"], "title": pr["title"],
+        "author": (pr.get("user") or {}).get("login", ""), "headSha": pr["head"]["sha"],
+        "headRef": pr["head"]["ref"], "baseRef": pr["base"]["ref"], "state": pr["state"],
+        "draft": bool(pr.get("draft")),
+    }
+
+
+def load_pr(repo, number, out_dir):
+    pr, md_files, comments = pr_details(repo, number)
     head_sha = pr["head"]["sha"]
-    files = [f for f in gh(f"repos/{repo}/pulls/{number}/files?per_page=100", paginate=True)
-             if f["filename"].lower().endswith(MD_EXT) and f["status"] != "removed"]
-    comments = gh(f"repos/{repo}/pulls/{number}/comments?per_page=100", paginate=True)
 
     index = []
-    for i, f in enumerate(files):
-        path = f["filename"]
+    for i, (path, f) in enumerate(md_files.items()):
         content = gh(f"repos/{repo}/contents/{quote(path, safe='/')}?ref={quote(head_sha, safe='')}")
         markdown = base64.b64decode(content["content"]).decode("utf-8", errors="replace")
         patch = f.get("patch")
         added, hunks = parse_patch(patch) if patch else (None, [])
-        file_comments = []
-        for c in comments:
-            if c.get("path") != path:
-                continue
-            on_new_side = c.get("side", "RIGHT") == "RIGHT"
-            file_comments.append({
-                "id": str(c["id"]),
-                "author": (c.get("user") or {}).get("login", ""),
-                "isBot": (c.get("user") or {}).get("type") == "Bot",
-                "body": c.get("body", ""),
-                "line": c.get("line") if on_new_side else None,  # None: outdated, or on a deleted line
-                "originalLine": c.get("original_line"),
-                "inReplyTo": str(c["in_reply_to_id"]) if c.get("in_reply_to_id") else None,
-                "createdAt": c.get("created_at", ""),
-                "url": c.get("html_url", ""),
-            })
+        file_comments = comments.get(path, [])
         fid = file_id(i, path)
         write(out_dir, f"files/{fid}.json", {
             "path": path,
@@ -135,17 +156,87 @@ def load_pr(repo, number, out_dir):
     load_id = f"{repo}#{number}@{head_sha[:12]}"
     write(out_dir, "docs/current.json", {
         "title": pr["title"],
-        "pr": {
-            "repo": repo, "number": int(number), "url": pr["html_url"], "title": pr["title"],
-            "author": (pr.get("user") or {}).get("login", ""), "headSha": head_sha,
-            "headRef": pr["head"]["ref"], "baseRef": pr["base"]["ref"], "state": pr["state"],
-        },
+        "pr": pr_summary(repo, number, pr),
         "files": index,
         "defaultFile": index[0]["id"] if index else None,
         "loadId": load_id,
         "loadedAt": datetime.now(timezone.utc).isoformat(),
     })
     return index
+
+
+MAX_REPO_FILES = 300
+
+
+def normalize_folder(path):
+    path = (path or "").strip().strip("/")
+    if ".." in path.split("/"):
+        sys.exit("The folder must be inside the repository.")
+    return path
+
+
+def load_repo(repo, out_dir, ref=None, folder="", review_pr=None):
+    """Markdown files of a repository (optionally one folder), read without a pull request.
+
+    With review_pr (the draft pull request a repository review opened), the files are read from its
+    branch, so they include the edits committed so far, and carry its changes and review comments."""
+    folder = normalize_folder(folder)
+    info = gh(f"repos/{repo}")
+    ref = ref or info["default_branch"]
+    pr = None
+    md_changed, comments = {}, {}
+    if review_pr:
+        pr, md_changed, comments = pr_details(repo, review_pr)
+        sha = pr["head"]["sha"]
+    else:
+        sha = gh(f"repos/{repo}/commits/{quote(ref, safe='')}")["sha"]
+    tree = gh(f"repos/{repo}/git/trees/{sha}?recursive=1")
+    prefix = folder + "/" if folder else ""
+    paths = sorted(e["path"] for e in tree.get("tree", [])
+                   if e.get("type") == "blob" and e["path"].lower().endswith(MD_EXT) and e["path"].startswith(prefix))
+    blobs = {e["path"]: e["sha"] for e in tree.get("tree", []) if e.get("type") == "blob"}
+    notes = []
+    if tree.get("truncated"):
+        notes.append("GitHub returned only part of this repository's file list; some files may be missing.")
+    if len(paths) > MAX_REPO_FILES:
+        notes.append(f"Loaded the first {MAX_REPO_FILES} of {len(paths)} markdown files; choose a folder to narrow it.")
+        paths = paths[:MAX_REPO_FILES]
+
+    index = []
+    for i, path in enumerate(paths):
+        blob = gh(f"repos/{repo}/git/blobs/{blobs[path]}")
+        markdown = base64.b64decode(blob["content"]).decode("utf-8", errors="replace")
+        f = md_changed.get(path)
+        added, hunks = (parse_patch(f.get("patch")) if f and f.get("patch") else (None, [])) if f else ([], [])
+        file_comments = comments.get(path, [])
+        status = f["status"] if f else "unchanged"
+        fid = file_id(i, path)
+        write(out_dir, f"files/{fid}.json", {
+            "path": path, "status": status, "markdown": markdown,
+            "added": added, "hunks": hunks, "comments": file_comments, "headSha": sha,
+        })
+        index.append({
+            "id": fid, "path": path, "status": status,
+            "changed": sum(b - a + 1 for a, b in (added or [])),
+            "comments": sum(1 for c in file_comments if not c["isBot"]),
+        })
+
+    name = repo + (f"/{folder}" if folder else "")
+    write(out_dir, "docs/current.json", {
+        "title": name,
+        "pr": None,
+        "repo": {
+            "repo": repo, "ref": ref, "folder": folder, "sha": sha,
+            "url": f"https://github.com/{repo}/tree/{quote(ref, safe='/')}" + (f"/{quote(folder, safe='/')}" if folder else ""),
+        },
+        "reviewPr": pr_summary(repo, review_pr, pr) if pr else None,
+        "files": index,
+        "defaultFile": index[0]["id"] if index else None,
+        "loadId": f"{repo}@{ref}:{folder}@{sha[:12]}",
+        "notes": notes,
+        "loadedAt": datetime.now(timezone.utc).isoformat(),
+    })
+    return index, notes
 
 
 def load_local(out_dir, paths):
@@ -167,13 +258,23 @@ def load_local(out_dir, paths):
 
 
 if __name__ == "__main__":
+    notes = []
     if len(sys.argv) >= 5 and sys.argv[1] == "pr":
         idx = load_pr(sys.argv[2], sys.argv[3], sys.argv[4])
+    elif len(sys.argv) >= 4 and sys.argv[1] == "repo":
+        ap = argparse.ArgumentParser(prog="pr_loader.py repo")
+        ap.add_argument("repo"); ap.add_argument("out_dir")
+        ap.add_argument("--ref"); ap.add_argument("--path", default="")
+        ap.add_argument("--review-pr", type=int)
+        a = ap.parse_args(sys.argv[2:])
+        idx, notes = load_repo(a.repo, a.out_dir, a.ref, a.path, a.review_pr)
     elif len(sys.argv) >= 4 and sys.argv[1] == "local":
         idx = load_local(sys.argv[2], sys.argv[3:])
     else:
         sys.exit(__doc__)
     for f in idx:
         print(f"{f['id']}\t{f['status']}\t{f['changed']} changed lines\t{f['comments']} comments\t{f['path']}")
+    for n in notes:
+        print("NOTE: " + n)
     if not idx:
-        print("No markdown files in this pull request.")
+        print("No markdown files found.")

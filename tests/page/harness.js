@@ -163,6 +163,21 @@ function prFixture(extra = {}) {
   }, extra);
 }
 
+// A repository review: markdown read from a branch without a pull request; reviewPr once one exists.
+function repoFixture(extra = {}, reviewPr = null) {
+  return Object.assign({
+    "docs/current": {
+      title: "o/r/docs", loadId: "o/r@main:docs@abc", defaultFile: "f0", pr: null,
+      repo: { repo: "o/r", ref: "main", folder: "docs", sha: "abc", url: "https://github.com/o/r/tree/main/docs" },
+      reviewPr,
+      files: [{ id: "f0", path: "docs/design.md", status: "unchanged", changed: 0, comments: 0 }, { id: "f1", path: "docs/other.md", status: "unchanged", changed: 0, comments: 0 }],
+    },
+    "files/f0": { path: "docs/design.md", status: "unchanged", markdown: SAMPLE, added: [], hunks: [], comments: [] },
+    "files/f1": { path: "docs/other.md", status: "unchanged", markdown: "# Other\n\nPlain text.\n", added: [], hunks: [], comments: [] },
+    "config/session": { sessionId: "session_test" },
+  }, extra);
+}
+
 const SAMPLE_LOCAL = { title: "", path: "docs/rate-limiting.md", pr: "", markdown: SAMPLE };
 
-module.exports = { open, closeBrowser, baseUrl, prFixture, SAMPLE, SAMPLE_LOCAL, wrappedPage };
+module.exports = { open, closeBrowser, baseUrl, prFixture, repoFixture, SAMPLE, SAMPLE_LOCAL, wrappedPage };

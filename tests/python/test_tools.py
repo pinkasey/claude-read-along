@@ -211,6 +211,94 @@ class Executing(unittest.TestCase):
             self.run_plan([{"source": "note", "id": "x", "path": "README.md", "line": 1, "endLine": 1, "text": "x", "do": "comment"}])
 
 
+class RepositoryReview(unittest.TestCase):
+    """A review of a repository's markdown, read without a pull request."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        for sub in ("notes", "edits", "docs"):
+            os.makedirs(os.path.join(self.dir, sub))
+        self.saved = {k: getattr(post, k) for k in ("gh", "pr_state", "file_text", "commit_with_git", "wait_for_head", "repo_md_paths")}
+        self.posted, self.created = [], []
+
+        def gh(path, method="GET", body=None, paginate=False):
+            if method == "POST" and path.endswith("/pulls"):
+                self.created.append(body)
+                return {"number": 9, "html_url": "https://github.com/o/r/pull/9"}
+            if method == "POST":
+                self.posted.append((path, body))
+                return {"html_url": "review"}
+            if "/commits/" in path:
+                return {"sha": "base1"}
+            return {"head": {"sha": "c2"}}
+        post.gh = gh
+        post.repo_md_paths = lambda repo, sha, folder: {"docs/a.md", "docs/b.md"}
+        post.file_text = lambda repo, path, ref: ("\n".join(DOC), "blob")
+        post.commit_with_git = lambda repo_dir, repo, plan, new_files, msg: (self.__dict__.update(commit_plan=plan, committed=new_files), "c2")[1]
+        post.wait_for_head = lambda *a, **k: None
+        post.pr_state = lambda repo, n: ({"head": {"sha": "c2", "ref": "read-along/review-test"}, "html_url": "https://github.com/o/r/pull/9"}, {"docs/a.md": [[1, 13]]})
+
+    def tearDown(self):
+        for k, v in self.saved.items():
+            setattr(post, k, v)
+
+    def put(self, kind, id_, **data):
+        with open(os.path.join(self.dir, kind, id_ + ".json"), "w") as f:
+            json.dump(data, f)
+
+    def plan(self, outside="anchor", review_pr=None, edit_mode="commit"):
+        args = type("A", (), {"repo": "o/r", "ref": "main", "folder": "docs", "review_pr": review_pr, "branch": "read-along/review-test",
+                              "data": self.dir, "edit_mode": edit_mode, "outside": outside, "revert_comments": "on"})
+        return post.make_plan(args)
+
+    def test_new_review_creates_a_branch_and_a_draft_pull_request(self):
+        sc = "o/r@main:docs/a.md"
+        self.put("notes", "n1", scope=sc, file="docs/a.md", line=3, endLine=3, text="a comment")
+        self.put("edits", "e1", scope=sc, file="docs/a.md", line=9, endLine=9, original="Para two.", text="Para 2.")
+        self.put("notes", "pr", scope="o/r#3:docs/a.md", file="docs/a.md", line=1, text="belongs to a pull request review")
+        plan = self.plan()
+        self.assertEqual(plan["create"], {"base": "main", "branch": "read-along/review-test"})
+        self.assertEqual({a["id"]: a["do"] for a in plan["actions"]}, {"n1": "commit-marker", "e1": "commit-comment"})
+        self.assertIn("New review pull request in o/r", post.describe(plan))
+        path = os.path.join(self.dir, "plan.json")
+        with open(path, "w") as f:
+            json.dump(plan, f)
+        res = post.execute(path, repo_dir="/unused")
+        self.assertEqual(res["pr"], {"number": 9, "url": "https://github.com/o/r/pull/9", "branch": "read-along/review-test"})
+        self.assertTrue(self.created[0]["draft"])
+        self.assertEqual((self.created[0]["head"], self.created[0]["base"]), ("read-along/review-test", "main"))
+        self.assertIn("docs/a.md", self.committed)
+        review_path, review = self.posted[-1]
+        self.assertTrue(review_path.endswith("/pulls/9/reviews"))
+        bodies = [c["body"] for c in review["comments"]]
+        self.assertTrue(any(b.startswith("a comment") and b.endswith(post.removal_suggestion()) for b in bodies))
+        self.assertTrue(any("**REVERT**" in b for b in bodies))
+
+    def test_nothing_to_commit_cannot_open_a_pull_request(self):
+        self.put("notes", "n1", scope="o/r@main:docs/a.md", file="docs/a.md", line=3, endLine=3, text="only a comment")
+        plan = self.plan(outside="summary")
+        self.assertIn("needs at least one commit", plan["blocked"])
+        self.assertIn("CANNOT POST", post.describe(plan))
+        path = os.path.join(self.dir, "plan.json")
+        with open(path, "w") as f:
+            json.dump(plan, f)
+        with self.assertRaises(SystemExit):
+            post.execute(path, repo_dir="/unused")
+        self.assertEqual(self.created, [])
+
+    def test_files_outside_the_folder_are_refused(self):
+        self.put("edits", "evil", scope="o/r@main:.github/workflows/ci.yml", file=".github/workflows/ci.yml", line=1, endLine=1, original="x", text="y")
+        plan = self.plan()
+        self.assertEqual(plan["actions"], [])
+        self.assertTrue(any("not a markdown file in the reviewed folder" in w for w in plan["warnings"]))
+
+    def test_later_posts_go_to_the_review_pull_request(self):
+        self.put("notes", "n1", scope="o/r@main:docs/a.md", file="docs/a.md", line=3, endLine=3, text="in the diff now")
+        plan = self.plan(review_pr=9)
+        self.assertNotIn("create", plan)
+        self.assertEqual((plan["number"], plan["actions"][0]["do"]), (9, "comment"))
+
+
 class GitCommit(unittest.TestCase):
     """commit_with_git against a local bare repository standing in for GitHub."""
 
@@ -239,6 +327,14 @@ class GitCommit(unittest.TestCase):
         self.assertEqual(self.git(self.origin, "rev-parse", "feat"), sha)
         self.assertEqual(self.git(self.origin, "show", "feat:doc.md"), "a\nB")
         self.assertEqual(self.git(self.origin, "rev-parse", "feat~1"), self.head)
+
+    def test_creates_a_new_review_branch(self):
+        plan = {"headRef": None, "headSha": self.head, "create": {"base": "feat", "branch": "read-along/review-1"}}
+        sha = post.commit_with_git(self.seed, "o/r", plan, {"doc.md": "a\nB\n"}, "Review")
+        self.assertEqual(self.git(self.origin, "rev-parse", "read-along/review-1"), sha)
+        self.assertEqual(self.git(self.origin, "rev-parse", "feat"), self.head, "the reviewed branch is untouched")
+        with self.assertRaises(SystemExit):  # never reuses an existing branch
+            post.commit_with_git(self.seed, "o/r", plan, {"doc.md": "x"}, "Review")
 
     def test_refuses_when_branch_moved(self):
         with self.assertRaises(SystemExit):
