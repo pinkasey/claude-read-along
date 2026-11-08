@@ -9,9 +9,21 @@ The document is split into reading sections, each read as one unit:
 - each heading,
 - each paragraph,
 - each list item, nested items included (a nested item is its own section, indented under its parent),
-- each table, code block and quote as a whole.
+- each table, code block and quote as a whole,
+- the front matter (a `---` block at the very start of the file),
+- each block of `<!-- comments -->` on its own lines.
 
 Horizontal rules, blank lines and link definitions are not sections.
+
+### Front matter and comments
+
+GitHub hides front matter (it shows it as a small table) and `<!-- comments -->` (it does not show them at all). The page shows both, so the reviewer sees what the file really says (**In review**):
+
+- Front matter is shown as it is written, in a dashed box labeled "Front matter". It is never read as a heading or paragraph.
+- A comment block is shown in a dashed box labeled "Comment", with the comment's text.
+- A comment inside a paragraph or list item is shown in place, as dimmed text between `<!--` and `-->`.
+- Comments inside code blocks are code, and stay as they are.
+- The text of a comment is shown as text: markup inside it is never rendered.
 
 Every section shows its starting line number from the file in a gutter, so comments can point at real lines.
 
@@ -23,10 +35,14 @@ Every section shows its starting line number from the file in a gutter, so comme
 | List item | Its text. A task item starts with "Done:" or "To do:". |
 | Table | "Table with N rows", then each row: "Row 1. Column: value. …" |
 | Code block | "Code block in LANGUAGE, N lines." With **Read code** on, each line is then read. |
+| Front matter | "Front matter, N lines." With **Read hidden** on, each line is then read. |
+| Comment block | "Hidden comment." With **Read hidden** on, its text is then read. |
 
 Text is spoken one sentence at a time, and long sentences are split at commas or spaces into chunks of about 200 characters. This keeps playback responsive and avoids browsers cutting off long utterances.
 
 A section that has an edit is read as edited.
+
+Comments inside a paragraph or list item are skipped, and with **Read hidden** on they are read where they appear.
 
 ## Highlighting and scrolling
 
@@ -68,6 +84,7 @@ The right-hand panel (the **Review list** button on narrow screens) starts with 
 | Voice | Browser default | Voices in the browser's language are listed first. |
 | Continuous | On | |
 | Read code | Off | |
+| Read hidden | Off | Reads front matter and `<!-- comments -->` instead of only announcing them. |
 | Screen on | On | Asks the browser to keep the screen awake while reading. |
 
 Speed, voice and the toggles are remembered in the browser.

@@ -1,6 +1,6 @@
 <title>Read-Along Review</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="read-along-version" content="0.2.0">
+<meta name="read-along-version" content="0.3.0">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&family=Literata:opsz,wght@7..72,400;7..72,600;7..72,700&display=swap">
@@ -104,6 +104,13 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
 .unit.t-heading { margin-top: 14px; }
 .body p { margin: .1em 0; }
 .body code { font-family: var(--font-mono); font-size: .85em; background: var(--code-bg); border-radius: 4px; padding: 1px 5px; }
+.md-hidden { color: var(--muted); font-style: italic; font-size: .9em; border: 1px dashed var(--line); border-radius: 4px; padding: 0 .3em; }
+.md-hidden::before { content: "<!-- "; font-style: normal; opacity: .7; }
+.md-hidden::after { content: " -->"; font-style: normal; opacity: .7; }
+.md-hidden-block { border: 1px dashed var(--line); border-radius: 8px; padding: 6px 12px; color: var(--muted); font-size: 15px; }
+.body .md-hidden-block pre { background: none; padding: 0; margin: 0; white-space: pre-wrap; }
+.md-hidden-label { font: 600 11px/1.6 var(--font-mono); text-transform: uppercase; letter-spacing: .05em; }
+.md-hidden-text { font-style: italic; white-space: pre-wrap; }
 .body pre { background: var(--code-bg); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-size: 14px; line-height: 1.5; margin: .2em 0; }
 .body pre code { background: none; padding: 0; font-size: inherit; }
 .body blockquote { margin: .2em 0; padding: 2px 14px; border-left: 3px solid var(--line); color: var(--muted); font-style: italic; }
@@ -345,6 +352,7 @@ header.top.folded .fold svg { transform: rotate(180deg); }
         <label class="toggle" id="announceLbl" title="Say “changed” before sections the pull request changed" hidden><input type="checkbox" id="announceChk" checked> Say “changed”</label>
         <label class="toggle" id="commentsLbl" title="Read existing review comments after their section" hidden><input type="checkbox" id="commentsChk" checked> Read comments</label>
         <label class="toggle" title="Read code blocks line by line instead of only announcing them"><input type="checkbox" id="codeChk"> Read code</label>
+        <label class="toggle" title="Read front matter and &lt;!-- comments --&gt; instead of only announcing them"><input type="checkbox" id="hiddenChk"> Read hidden</label>
         <label class="toggle" title="Stop the screen from sleeping while reading"><input type="checkbox" id="wakeChk" checked> Screen on</label>
       </div>
     </div>
@@ -377,6 +385,19 @@ header.top.folded .fold svg { transform: rotate(180deg); }
     clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 2600);
   }
   const textOf = (html) => { const d = document.createElement("div"); d.innerHTML = html; return (d.textContent || "").replace(/\s+/g, " ").trim(); };
+  // Markdown to safe HTML, keeping <!-- comments --> visible: GitHub hides them, a reviewer wants to see them.
+  // They are swapped for placeholders around the sanitizer, then shown as escaped text in the page's own span.
+  const HIDDEN_TITLE = "HTML comment: not shown on GitHub";
+  const mdHtml = (src, inline) => showHidden(inline ? marked.parseInline(src) : marked.parse(src));
+  function showHidden(raw) {
+    const found = [];
+    const html = clean(raw.replace(/<!--([\s\S]*?)-->/g, (m, t) => { found.push(t.trim()); return "\uE000" + (found.length - 1) + "\uE001"; }));
+    return html.replace(/\uE000(\d+)\uE001/g, (m, i) => found[i] == null ? "" : '<span class="md-hidden" title="' + HIDDEN_TITLE + '">' + esc(found[i]) + "</span>");
+  }
+  // Text of rendered HTML, with or without the hidden comments.
+  const textWithout = (html) => { const d = document.createElement("div"); d.innerHTML = html; d.querySelectorAll(".md-hidden").forEach((e) => e.replaceWith(" ")); return (d.textContent || "").replace(/\s+/g, " ").trim(); };
+  const FRONT_MATTER = /^---[ \t]*\r?\n([\s\S]*?)\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/;
+  const ONLY_COMMENTS = /^(?:\s*<!--[\s\S]*?-->)+\s*$/;
 
   // ---------- state ----------
   const S = {
@@ -413,9 +434,21 @@ header.top.folded .fold svg { transform: rotate(180deg); }
   function buildUnits(md) {
     const units = [];
     let tokens;
+    // Front matter: its own section; the lexer sees blank lines in its place, so line numbers hold.
+    const fm = md.match(FRONT_MATTER);
+    let fmUnit = null;
+    if (fm) {
+      const n = (fm[0].replace(/\r?\n$/, "").match(/\n/g) || []).length + 1;
+      const body = fm[1];
+      fmUnit = { key: "L1", line: 1, endLine: n, type: "frontmatter", depth: 0, own: fm[0].replace(/\r?\n$/, ""), codeText: body,
+        html: '<div class="md-hidden-block"><div class="md-hidden-label">Front matter</div><pre>' + esc(body) + "</pre></div>",
+        speech: "Front matter, " + body.split("\n").filter((l) => l.trim()).length + " lines." };
+      md = "\n".repeat(n - 1) + md.slice(fm[0].replace(/\r?\n$/, "").length);
+    }
     try { tokens = marked.lexer(md); } catch (e) { return [{ key: "L1", line: 1, type: "paragraph", depth: 0, html: "<p>" + esc(md) + "</p>", speech: md, own: md }]; }
     let pos = 0;
     const push = (u) => { u.key = "L" + u.line + (units.some((x) => x.key === "L" + u.line) ? "-" + units.length : ""); units.push(u); };
+    if (fmUnit) units.push(fmUnit);
 
     function addList(list, depth, from) {
       let cursor = from;
@@ -425,11 +458,11 @@ header.top.folded .fold svg { transform: rotate(180deg); }
         const ownTokens = item.tokens.filter((t) => t.type !== "list");
         const own = ownTokens.map((t) => t.raw).join("").trim();
         const marker = item.task ? (item.checked ? "☑" : "☐") : list.ordered ? ((list.start === "" ? 1 : Number(list.start) || 1) + idx) + "." : "•";
-        const html = clean(marked.parser(ownTokens));
-        let speech = textOf(html);
+        const html = showHidden(marked.parser(ownTokens));
+        let speech = textWithout(html);
         if (item.task) speech = (item.checked ? "Done: " : "To do: ") + speech;
         const l0 = lineAt(md, at);
-        push({ line: l0, endLine: l0 + (own.match(/\n/g) || []).length, type: "item", depth, marker, html, speech, own });
+        push({ line: l0, endLine: l0 + (own.match(/\n/g) || []).length, type: "item", depth, marker, html, speech, speechAll: (item.task ? (item.checked ? "Done: " : "To do: ") : "") + textOf(html), own });
         item.tokens.filter((t) => t.type === "list").forEach((sub) => { addList(sub, depth + 1, at); });
       });
     }
@@ -439,10 +472,18 @@ header.top.folded .fold svg { transform: rotate(180deg); }
       if (tok.type === "space" || tok.type === "hr" || tok.type === "def") continue;
       const line = lineAt(md, start + (tok.raw.length - tok.raw.replace(/^\n+/, "").length));
       if (tok.type === "list") { addList(tok, 0, start); continue; }
-      const html = clean(marked.parser([tok]));
-      let speech = textOf(html);
-      let type = tok.type;
       const endLine = line + (tok.raw.trim().match(/\n/g) || []).length;
+      if (tok.type === "html" && ONLY_COMMENTS.test(tok.raw)) {
+        const texts = [...tok.raw.matchAll(/<!--([\s\S]*?)-->/g)].map((m) => m[1].trim());
+        push({ line, endLine, type: "hidden", depth: 0, own: tok.raw.trim(), codeText: texts.join("\n"),
+          html: '<div class="md-hidden-block" title="' + HIDDEN_TITLE + '"><div class="md-hidden-label">Comment</div>' + texts.map((t) => '<div class="md-hidden-text">' + esc(t) + "</div>").join("") + "</div>",
+          speech: "Hidden comment." });
+        continue;
+      }
+      const html = showHidden(marked.parser([tok]));
+      let speech = textWithout(html);
+      let speechAll = textOf(html);
+      let type = tok.type;
       if (type === "code") {
         const n = tok.text.split("\n").length;
         speech = "Code block" + (tok.lang ? " in " + tok.lang : "") + ", " + n + " line" + (n === 1 ? "" : "s") + ".";
@@ -450,8 +491,8 @@ header.top.folded .fold svg { transform: rotate(180deg); }
         continue;
       }
       if (type === "table") speech = tableSpeech(tok);
-      if (type === "blockquote") speech = "Quote. " + speech;
-      push({ line, endLine, type, depth: tok.depth || 0, html, speech, own: tok.raw.trim() });
+      if (type === "blockquote") { speech = "Quote. " + speech; speechAll = "Quote. " + speechAll; }
+      push({ line, endLine, type, depth: tok.depth || 0, html, speech, speechAll: type === "table" ? speech : speechAll, own: tok.raw.trim() });
     }
     return units;
   }
@@ -506,11 +547,12 @@ header.top.folded .fold svg { transform: rotate(180deg); }
     const i = S.units.indexOf(u);
     if (S.hasChanges && !changedOnly() && u.changed && !(i > 0 && S.units[i - 1].changed) && $("announceChk").checked) out.push({ text: "Changed.", kind: "prefix" });
     const edit = S.edits[u.key];
-    if (u.type === "code" && $("codeChk").checked && !edit) {
+    const hidden = $("hiddenChk").checked;
+    if (!edit && ((u.type === "code" && $("codeChk").checked) || ((u.type === "frontmatter" || u.type === "hidden") && hidden))) {
       out.push({ text: u.speech, kind: "prefix" });
       u.codeText.split("\n").map((l) => l.trim()).filter(Boolean).forEach((l) => out.push({ text: l, kind: "code" }));
     } else {
-      const text = edit ? textOf(clean(marked.parse(edit.text))) : u.speech;
+      const text = edit ? (hidden ? textOf : textWithout)(mdHtml(edit.text)) : (hidden && u.speechAll) || u.speech;
       const plain = u.type === "paragraph" || u.type === "heading" || u.type === "item" || u.type === "blockquote";
       splitSentences(text).forEach((t) => out.push({ text: t, kind: plain ? "body" : "other" }));
     }
@@ -537,7 +579,7 @@ header.top.folded .fold svg { transform: rotate(180deg); }
     if (!body) return;
     // Build the section's visible text with whitespace collapsed, remembering where each character lives.
     const map = []; let str = "";
-    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (n.parentElement.closest(".marker, .edited-flag") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT) });
+    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (n.parentElement.closest($("hiddenChk").checked ? ".marker, .edited-flag" : ".marker, .edited-flag, .md-hidden") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT) });
     for (let n = walker.nextNode(); n; n = walker.nextNode()) {
       const t = n.nodeValue;
       for (let k = 0; k < t.length; k++) {
@@ -558,14 +600,16 @@ header.top.folded .fold svg { transform: rotate(180deg); }
   // ---------- rendering ----------
   function unitLabel(u) {
     const ed = S.edits[u.key];
-    const t = ed ? textOf(clean(marked.parse(ed.text))) : (textOf(u.html) || u.speech);
+    const t = ed ? textOf(clean(marked.parse(ed.text)))
+      : u.type === "frontmatter" || u.type === "hidden" ? (u.type === "frontmatter" ? "Front matter: " : "Comment: ") + u.codeText.split("\n").filter((l) => l.trim()).join(" · ")
+      : (textOf(u.html) || u.speech);
     return t.length > 90 ? t.slice(0, 88) + "…" : t;
   }
   function renderUnitBody(u) {
     const edit = S.edits[u.key];
     let inner;
     if (edit) {
-      const h = u.type === "item" ? clean(marked.parseInline(edit.text)) : clean(marked.parse(edit.text));
+      const h = mdHtml(edit.text, u.type === "item");
       inner = h + '<span class="edited-flag">edited</span>';
     } else inner = u.html;
     if (u.type === "table") inner = '<div class="table-scroll">' + inner + "</div>";
@@ -1100,7 +1144,7 @@ header.top.folded .fold svg { transform: rotate(180deg); }
   });
   $("rateSel").addEventListener("change", () => { ls.set("rate", $("rateSel").value); if (S.playing) speakFrom(S.cur, S.sentence); });
   $("voiceSel").addEventListener("change", () => { ls.set("voice", $("voiceSel").value); if (S.playing) speakFrom(S.cur, S.sentence); });
-  ["autoChk", "codeChk", "wakeChk", "changedChk", "announceChk", "commentsChk"].forEach((id) => {
+  ["autoChk", "codeChk", "hiddenChk", "wakeChk", "changedChk", "announceChk", "commentsChk"].forEach((id) => {
     const saved = ls.get(id, null); if (saved !== null) $(id).checked = saved;
     $(id).addEventListener("change", () => {
       ls.set(id, $(id).checked);
