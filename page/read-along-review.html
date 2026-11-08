@@ -1280,6 +1280,11 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
     const say = (t, k) => { statusEl.textContent = t; statusEl.className = "status" + (k ? " " + k : ""); };
     const mcp = await getMcp();
     if (!mcp || !S.sessionId) { say("This page can't message Claude directly here. Copy the sentence above into the chat.", "warn"); return false; }
+    // Ask for the connector permission explicitly first. Leaving it to the call's own prompt
+    // failed with "connector access isn't confirmed for this artifact".
+    const perm = await connectorPermission(true);
+    if (perm === "denied") { say("This page isn't allowed to message Claude. Turn it on in the page's Permissions, or copy the sentence above into the chat.", "warn"); offerPermissions(statusEl); return false; }
+    if (perm === "unavailable") { say("The Claude Code connector can't be used from this page for you. Copy the sentence above into the chat.", "warn"); return false; }
     say("Sending to Claude…");
     try {
       await mcp.callTool("Claude Code Remote", "send_message", { session_id: S.sessionId, message });
@@ -1301,6 +1306,30 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
       return false;
     }
   }
+  const CONNECTOR_PERM = "mcp:Claude Code Remote";
+  let permsP = null;
+  const getPerms = () => (permsP = permsP || (window.claude && window.claude.use ? window.claude.use("permissions") : Promise.resolve(null)).catch(() => null));
+  // "granted", "prompt", "denied" or "unavailable"; with ask, a "prompt" state shows claude.ai's dialog.
+  async function connectorPermission(ask) {
+    const perms = await getPerms();
+    if (!perms) return "prompt"; // no permissions API here: let the call itself ask
+    let st = await perms.state(CONNECTOR_PERM).catch(() => "prompt");
+    if (st === "prompt" && ask) {
+      const r = await perms.request([CONNECTOR_PERM]).catch(() => ({}));
+      st = r[CONNECTOR_PERM] || st;
+    }
+    return st;
+  }
+  function offerPermissions(statusEl) {
+    const b = document.createElement("button"); b.type = "button"; b.className = "btn small"; b.textContent = "Open permissions";
+    b.style.marginLeft = "8px";
+    b.addEventListener("click", async () => {
+      const perms = await getPerms();
+      try { await perms.manage(); statusEl.textContent = "Permissions closed. Press the button again to send."; statusEl.className = "status"; }
+      catch { statusEl.textContent = "Couldn't open the Permissions panel. Use the page's Permissions menu at the top of claude.ai, then try again."; statusEl.className = "status warn"; }
+    });
+    statusEl.appendChild(b);
+  }
   // When a panel opens, say up front if this page can't message Claude for this person.
   async function checkConnector(statusEl, btn) {
     const mcp = await getMcp();
@@ -1313,7 +1342,9 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
       const known = srv.authStatus !== "unknown";
       if (known && !srv.tools.some((t) => t.name === "send_message")) { statusEl.textContent = "Your Claude Code connector doesn't let pages send messages. Copy the sentence above into the chat."; statusEl.className = "status warn"; btn.disabled = true; return; }
       if (srv.authStatus === "needs_reauth") { statusEl.textContent = "The Claude Code connector needs you to sign in again (Settings, Connectors). Meanwhile, copy the sentence above into the chat."; statusEl.className = "status warn"; }
-      if (!known) { statusEl.textContent = "The first time, claude.ai asks you to allow this page to message Claude."; statusEl.className = "status"; }
+      const perm = await connectorPermission(false);
+      if (perm === "denied") { statusEl.textContent = "This page isn't allowed to message Claude."; statusEl.className = "status warn"; offerPermissions(statusEl); return; }
+      if (perm === "prompt" || !known) { statusEl.textContent = "When you press the button, claude.ai asks you to allow this page to message Claude."; statusEl.className = "status"; }
     } catch { /* listing failed: let the button try, and report what happens */ }
   }
   function parsePrRef(t) {
