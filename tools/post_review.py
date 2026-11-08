@@ -22,6 +22,7 @@ import os
 import re
 import subprocess
 import sys
+from urllib.parse import quote
 
 MARKER = "<!-- review note -->"
 LIST_ITEM = re.compile(r"^(\s*)([-*+]|\d+[.)])(\s+)(\[[ xX]\]\s+)?")
@@ -66,8 +67,12 @@ def pr_state(repo, number):
     return pr, {f["filename"]: hunks_from_patch(f.get("patch")) for f in files}
 
 
+def contents_url(repo, path):
+    return f"repos/{repo}/contents/{quote(path, safe='/')}"  # '#', '?' and '%' in a file name are data, not URL syntax
+
+
 def file_text(repo, path, ref):
-    c = gh(f"repos/{repo}/contents/{path}?ref={ref}")
+    c = gh(f"{contents_url(repo, path)}?ref={quote(ref, safe='')}")
     return base64.b64decode(c["content"]).decode("utf-8"), c["sha"]
 
 
@@ -92,6 +97,13 @@ def marker_line(lines, start):
     m = LIST_ITEM.match(line)
     indent = len(m.group(0)) if m else len(line) - len(line.lstrip())
     return " " * indent + MARKER
+
+
+def fenced(text, info=""):
+    """A code fence longer than any backtick run inside, so the text cannot close it early."""
+    longest = max([len(r) for r in re.findall(r"`+", text)] or [0])
+    fence = "`" * max(3, longest + 1)
+    return f"{fence}{info}\n{text}\n{fence}"
 
 
 def plural(n, word):
@@ -226,7 +238,7 @@ def execute(plan_path):
         elif x["do"] == "commit-marker":
             by_path.setdefault(x["path"], []).append((x["endLine"] + 1, x["endLine"], [x["marker"]], x))
     for path, ops in by_path.items():
-        text, sha = file_text(repo, path, plan["headRef"])
+        text, sha = file_text(repo, path, plan["headSha"])
         new_lines, new_line, placed = apply_ops(text.split("\n"), ops)
         mapping[path] = new_line
         for start, end, new_start, n_new, act in placed:
@@ -237,7 +249,7 @@ def execute(plan_path):
         msg += f" in {path}\n\nCommitted from a Read-Along review of #{number}."
         if os.environ.get("READALONG_COMMIT_TRAILER"):  # attribution lines, supplied by the session that posts
             msg += "\n\n" + os.environ["READALONG_COMMIT_TRAILER"]
-        res = gh(f"repos/{repo}/contents/{path}", "PUT", {
+        res = gh(contents_url(repo, path), "PUT", {
             "message": msg, "branch": plan["headRef"], "sha": sha,
             "content": base64.b64encode("\n".join(new_lines).encode("utf-8")).decode("ascii"),
         })
@@ -254,7 +266,7 @@ def execute(plan_path):
             comments.append({"x": x, "c": {"path": x["path"], "line": line, "side": "RIGHT", "body": x["text"]}})
         elif x["do"] == "suggest":
             a, b = nl(x["line"]), nl(x["endLine"])
-            c = {"path": x["path"], "line": b, "side": "RIGHT", "body": "```suggestion\n" + "\n".join(x["new"]) + "\n```"}
+            c = {"path": x["path"], "line": b, "side": "RIGHT", "body": fenced("\n".join(x["new"]), "suggestion")}
             if b > a:
                 c.update(start_line=a, start_side="RIGHT")
             comments.append({"x": x, "c": c})
@@ -262,7 +274,7 @@ def execute(plan_path):
             comments.append({"x": x, "c": {"path": x["path"], "line": x["newLine"], "side": "RIGHT", "body": x["text"]}})
         elif x["do"] == "commit-comment":
             short = commits[-1]["sha"][:7] if commits else ""
-            body = f"Edited during review (committed in {short}). It was:\n\n```markdown\n" + "\n".join(x["old"]) + "\n```"
+            body = f"Edited during review (committed in {short}). It was:\n\n" + fenced("\n".join(x["old"]), "markdown")
             c = {"path": x["path"], "line": x["newEndLine"], "side": "RIGHT", "body": body}
             if x["newEndLine"] > x["newLine"]:
                 c.update(start_line=x["newLine"], start_side="RIGHT")
@@ -291,8 +303,8 @@ def execute(plan_path):
                 body.append(f"- `{x['path']}` line {x['line']}: {x['text']}" + (f"\n  > {x['anchor']}" if x.get("anchor") else ""))
             else:
                 why = f" ({x['why']})" if x.get("why") else ""
-                body.append(f"- `{x['path']}` line {x['line']}, suggested edit{why}:\n\n  ```markdown\n  "
-                            + (x["text"] or "").replace("\n", "\n  ") + "\n  ```")
+                body.append(f"- `{x['path']}` line {x['line']}, suggested edit{why}:\n\n  "
+                            + fenced(x["text"] or "", "markdown").replace("\n", "\n  "))
     review = gh(f"repos/{repo}/pulls/{number}/reviews", "POST", {
         "commit_id": head, "event": "COMMENT", "body": "\n".join(body), "comments": [i["c"] for i in comments],
     })

@@ -17,6 +17,7 @@ import os
 import re
 import subprocess
 import sys
+from urllib.parse import quote
 from datetime import datetime, timezone
 
 MD_EXT = (".md", ".markdown", ".mdx")
@@ -95,7 +96,7 @@ def load_pr(repo, number, out_dir):
     index = []
     for i, f in enumerate(files):
         path = f["filename"]
-        content = gh(f"repos/{repo}/contents/{path}?ref={head_sha}")
+        content = gh(f"repos/{repo}/contents/{quote(path, safe='/')}?ref={quote(head_sha, safe='')}")
         markdown = base64.b64decode(content["content"]).decode("utf-8", errors="replace")
         patch = f.get("patch")
         added, hunks = parse_patch(patch) if patch else (None, [])

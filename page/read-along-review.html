@@ -43,6 +43,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { background: var(--bg); color: var(--ink); font-family: var(--font-ui); font-size: 15px; line-height: 1.5; }
 button, select, textarea, input { font: inherit; color: inherit; }
 button { cursor: pointer; }
@@ -196,8 +197,9 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
 .ol-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .ol-c { flex: none; font-size: 11px; font-weight: 700; color: var(--accent); border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; }
 /* Panels: open a pull request, post the review */
-.scrim { position: fixed; inset: 0; background: rgba(10, 14, 22, .45); z-index: 40; }
-.panel { position: fixed; z-index: 41; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 6vh); transform: translateX(-50%); width: min(620px, calc(100vw - 32px)); max-height: calc(100vh - 12vh - var(--player-h)); overflow: auto; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.25); padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+.panel { margin: calc(env(safe-area-inset-top, 0px) + 6vh) auto auto; width: min(620px, calc(100vw - 32px)); max-height: calc(100vh - 12vh); overflow: auto; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.25); padding: 18px 20px; flex-direction: column; gap: 14px; }
+.panel[open] { display: flex; }
+.panel::backdrop { background: rgba(10, 14, 22, .45); }
 .panel h2 { margin: 0; font-size: 18px; }
 .panel p { margin: 0; color: var(--muted); font-size: 14px; }
 .panel .field { display: flex; flex-direction: column; gap: 6px; }
@@ -298,8 +300,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
   </div>
 </div>
 <div class="toast" id="toast" hidden></div>
-<div class="scrim" id="scrim" hidden></div>
-<section class="panel" id="panel" role="dialog" aria-modal="true" aria-labelledby="panelTitle" hidden></section>
+<dialog class="panel" id="panel" aria-labelledby="panelTitle"></dialog>
 
 <script>
 (() => {
@@ -543,10 +544,10 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
   function composerHtml(u) {
     if (S.composer.kind === "note") {
       return '<div class="composer" data-stop="1"><label for="composerText">Review note on line ' + u.line + '</label>' +
-        '<textarea id="composerText" placeholder="What should change here?"></textarea>' +
+        '<textarea id="composerText" placeholder="What should change here?">' + esc(S.composer.draft || "") + "</textarea>" +
         '<div class="row"><button class="btn primary" data-act="save-note">Save note</button><button class="btn" data-act="cancel">Cancel</button></div></div>';
     }
-    const cur = S.composer.proposed != null ? S.composer.proposed : S.edits[u.key] ? S.edits[u.key].text : u.own;
+    const cur = S.composer.draft != null ? S.composer.draft : S.composer.proposed != null ? S.composer.proposed : S.edits[u.key] ? S.edits[u.key].text : u.own;
     return '<div class="composer" data-stop="1"><label for="composerText">Edit markdown, line ' + u.line + '</label>' +
       (S.composer.proposed != null ? '<div class="proposal-hint">Proposed from your voice command. Say “accept” or “cancel”, or adjust it here.</div>' : "") +
       '<textarea id="composerText" class="mono">' + esc(cur) + "</textarea>" +
@@ -719,7 +720,12 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
 
   // ---------- storage: shared db with a local fallback ----------
   // Notes and edits carry a "scope" naming the pull request and file they belong to, so several files never mix.
-  const safeId = (s) => String(s).replace(/[^A-Za-z0-9_\-.~:@+]/g, "_").slice(-150);
+  // 64-bit FNV-1a, as hex: a short id that differs for every scope (unlike replacing characters).
+  function hashId(str) {
+    let h = 0xcbf29ce484222325n; const P = 0x100000001b3n, M = 0xffffffffffffffffn;
+    for (const ch of String(str)) { h ^= BigInt(ch.codePointAt(0)); h = (h * P) & M; }
+    return h.toString(16).padStart(16, "0");
+  }
   const local = {
     load() { S.meta = ls.get("doc", null); S.allNotes = ls.get("notes", []); S.allEdits = Object.values(ls.get("edits", {})); },
     persist() { ls.set("doc", S.meta); ls.set("notes", S.allNotes); const m = {}; S.allEdits.forEach((e) => (m[e.id || e.key] = e)); ls.set("edits", m); },
@@ -727,7 +733,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
   function composeDoc() {
     const m = S.meta;
     if (!m) { S.doc = null; return; }
-    if (!Array.isArray(m.files)) { S.doc = Object.assign({ scope: "" }, m, { pr: typeof m.pr === "string" ? m.pr : "" }); S.fileId = null; return; }
+    if (!Array.isArray(m.files)) { S.doc = Object.assign({}, m, { pr: typeof m.pr === "string" ? m.pr : "", scope: m.docId ? "doc:" + m.docId : "" }); S.fileId = null; return; }
     const ids = m.files.map((f) => f.id);
     const remembered = ls.get("file:" + (m.loadId || ""), null);
     if (!ids.includes(S.fileId)) S.fileId = ids.includes(remembered) ? remembered : (m.defaultFile && ids.includes(m.defaultFile) ? m.defaultFile : ids[0]);
@@ -745,9 +751,10 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
     S.notes = S.allNotes.filter((n) => (n.scope || "") === sc);
     S.edits = {}; S.allEdits.forEach((e) => { if ((e.scope || "") === sc) S.edits[e.key] = e; });
   }
-  const editId = (key) => (S.doc && S.doc.scope ? safeId(S.doc.scope) + "~" : "") + key;
+  const editId = (key, scope) => { scope = scope != null ? scope : (S.doc && S.doc.scope) || ""; return scope ? "e" + hashId(scope) + "~" + key : key; };
   async function saveDoc(d) {
     d.loadedAt = new Date().toISOString();
+    d.docId = hashId(d.loadedAt + "|" + (d.path || "") + "|" + d.markdown.length + "|" + Math.random());
     if (S.mode === "shared") {
       try { await S.db.doc("docs/current").set(d); toast("Document loaded"); } catch (e) { toast("Could not save the document: " + (e.message || e.code)); }
     } else { S.meta = d; S.allNotes = []; S.allEdits = []; local.persist(); setDoc(); toast("Document loaded"); }
@@ -773,7 +780,10 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
     return true;
   }
   async function deleteEdit(key) {
-    const e = S.edits[key]; const id = (e && e.id) || editId(key);
+    const e = S.edits[key];
+    return deleteEditById((e && e.id) || editId(key));
+  }
+  async function deleteEditById(id) {
     if (S.mode === "shared") { try { await S.db.doc("edits/" + id).delete(); } catch (err) { toast("Could not undo: " + (err.message || err.code)); } }
     else { S.allEdits = S.allEdits.filter((x) => (x.id || x.key) !== id); local.persist(); applyScope(); render(); }
   }
@@ -798,7 +808,13 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
   function setDoc() {
     composeDoc(); applyScope();
     const md = S.doc && S.doc.markdown ? S.doc.markdown : "";
-    if (md !== lastMd) { S.units = md ? buildUnits(md) : []; lastMd = md; if (S.cur >= S.units.length) S.cur = 0; }
+    const ident = (S.doc && S.doc.scope || "") + "\u0000" + md;
+    if (ident !== lastMd) {
+      const sameDoc = lastMd !== null && lastMd.split("\u0000")[0] === (S.doc && S.doc.scope || "") && S.units.length;
+      S.units = md ? buildUnits(md) : []; lastMd = ident;
+      if (!sameDoc) { pause(); S.cur = 0; S.sentence = 0; proposal = null; S.composer = null; }
+      if (S.cur >= S.units.length) S.cur = 0;
+    }
     annotateUnits();
     render();
   }
@@ -884,6 +900,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
     const i = Number(el.dataset.i);
     speakFrom(i, 0); // clicking a section reads it, and keeps going if Continuous is on
   });
+  $("doc").addEventListener("input", (e) => { if (e.target.id === "composerText" && S.composer) S.composer.draft = e.target.value; });
   $("railInner").addEventListener("click", (e) => {
     const ol = e.target.closest("[data-ol]");
     if (ol) { goTo(Number(ol.dataset.ol)); $("rail").classList.remove("open"); return; }
@@ -934,7 +951,8 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
   });
   const savedRate = ls.get("rate", null); if (savedRate) $("rateSel").value = savedRate;
   document.addEventListener("keydown", (e) => {
-    if (e.target.closest("textarea, input, select") || e.ctrlKey || e.metaKey || e.altKey) {
+    if ((e.key === " " || e.key === "Enter") && e.target.closest("button, a, summary, [role=button], dialog")) return;
+    if (e.target.closest("textarea, input, select, dialog") || e.ctrlKey || e.metaKey || e.altKey) {
       if (e.key === "Escape" && S.composer) { S.composer = null; render(); }
       return;
     }
@@ -1097,7 +1115,8 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
       "SECTION:\n" + current + "\n\nINSTRUCTION:\n" + instruction;
     try {
       const { text } = await sample(prompt, { modelTier: "quick" });
-      let out = String(text || "").trim().replace(/^```[a-z]*\n([\s\S]*?)\n```$/i, "$1").trim();
+      let out = String(text || "").trim();
+      if (u.type !== "code") out = out.replace(/^```[a-z]*\n([\s\S]*?)\n```$/i, "$1").trim(); // a code section keeps its fences
       if (!out) return { error: "Claude returned nothing. Try saying it differently." };
       return { text: out };
     } catch (e) {
@@ -1121,11 +1140,14 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
       synth.speak(ut);
     }, 80);
   }
-  function propose(idx, text) {
+  function propose(idx, text, scope, key) {
+    if ((S.doc && S.doc.scope || "") !== scope || !S.units[idx] || S.units[idx].key !== key) {
+      feedback("You moved to another file, so that edit was dropped.", "warn"); return;
+    }
     const u = S.units[idx];
     const resume = S.playing;
     pause();
-    proposal = { key: u.key, idx, text, resume };
+    proposal = { key: u.key, idx, text, resume, scope };
     S.cur = idx;
     S.composer = { kind: "edit", key: u.key, proposed: text, voice: true };
     render(); setActive(idx, true);
@@ -1139,8 +1161,9 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
     const text = ta ? ta.value.trim() : p.text;
     S.composer = null; render();
     const u = S.units[p.idx];
+    if (!u || u.key !== p.key || (S.doc && S.doc.scope || "") !== p.scope) { feedback("The file changed, so that edit was dropped.", "warn"); return true; }
     const ok = await saveEdit(u, text);
-    if (ok) { undoStack.push({ type: "edit", key: u.key }); feedback("Edit saved on line " + u.line + ".", "ok"); }
+    if (ok) { undoStack.push({ type: "edit", id: editId(u.key, p.scope) }); feedback("Edit saved on line " + u.line + ".", "ok"); }
     if (p.resume) speakFrom(Math.min(p.idx + 1, S.units.length - 1), 0);
     return true;
   }
@@ -1206,22 +1229,24 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
       case "change": {
         const current = S.edits[u.key] ? S.edits[u.key].text : u.own;
         const out = literalChange(current, p.from, p.to);
-        if (out != null) { propose(target, out); return; }
+        const scope = S.doc.scope || "";
+        if (out != null) { propose(target, out, scope, u.key); return; }
         feedback("Asking Claude to apply: “" + p.instruction + "”…");
         const r = await askClaudeEdit(u, p.instruction);
-        r.error ? feedback(r.error, "warn") : propose(target, r.text);
+        r.error ? feedback(r.error, "warn") : propose(target, r.text, scope, u.key);
         return;
       }
       case "ask-edit": {
+        const scope = S.doc.scope || "";
         feedback("Asking Claude to apply: “" + p.instruction + "”…");
         const r = await askClaudeEdit(u, p.instruction);
-        r.error ? feedback(r.error, "warn") : propose(target, r.text);
+        r.error ? feedback(r.error, "warn") : propose(target, r.text, scope, u.key);
         return;
       }
       case "undo": {
         const last = undoStack.pop();
         if (!last) { feedback("Nothing to undo.", "warn"); return; }
-        if (last.type === "note") await deleteNote(last.id); else await deleteEdit(last.key);
+        if (last.type === "note") await deleteNote(last.id); else await deleteEditById(last.id);
         feedback("Removed the last " + last.type + ".", "ok");
         return;
       }
@@ -1269,15 +1294,20 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
     b.addEventListener("click", async () => { try { await navigator.clipboard.writeText(text); b.textContent = "Copied"; } catch { b.textContent = "Select and copy"; } });
     return b;
   }
+  let panelOpener = null;
   function openPanel(build) {
     pause();
     const p = $("panel"); p.innerHTML = ""; build(p);
-    p.hidden = false; $("scrim").hidden = false;
+    panelOpener = document.activeElement;
+    if (!p.open) p.showModal();
     const first = p.querySelector("input[type=text], button.primary"); if (first) first.focus();
   }
-  function closePanel() { $("panel").hidden = true; $("scrim").hidden = true; if (voiceMode) refocusCmd(); }
-  $("scrim").addEventListener("click", closePanel);
-  $("panel").addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); closePanel(); } });
+  function closePanel() { if ($("panel").open) $("panel").close(); }
+  $("panel").addEventListener("close", () => {
+    // Back to whatever opened the panel (or the command box, in voice mode).
+    if (voiceMode) refocusCmd(); else if (panelOpener && panelOpener.focus) panelOpener.focus({ preventScroll: true });
+  });
+  $("panel").addEventListener("click", (e) => { if (e.target === $("panel")) closePanel(); }); // a click on the backdrop
 
   function openPrPanel() {
     openPanel((p) => {
