@@ -13,12 +13,37 @@ It works with a pull request (changed sections, existing review comments, severa
 | `tools/post_review.py` | Posts a review to its pull request in two steps: `plan` (changes nothing) and `execute`. |
 | `examples/sample-design-doc.md` | A sample design document to try it on. |
 
+## Getting to the page
+
+The review page is a private claude.ai page (an Artifact) that belongs to you. Claude publishes it the first time you ask for a review in Claude Code (web, desktop app or terminal), and it then stays at the same link. To open it again without asking Claude:
+
+- use the link Claude gave you,
+- find it in your artifacts at claude.ai/code/artifacts (in the terminal, `/artifacts`),
+- or pin it to your claude.ai sidebar (ask Claude to pin the review page).
+
+In the Claude Code app the page can sit in the side pane, next to the chat.
+
+## What works on the page alone, and what needs Claude
+
+| On the page alone | Needs a Claude Code session |
+| --- | --- |
+| Listening, navigation, voice commands | Loading a pull request (the page cannot reach GitHub) |
+| Notes and edits | Posting the review, and committing edits |
+| Opening or pasting a local markdown file | |
+| Edits proposed by voice ("edit make this shorter"), which ask Claude directly from the page | |
+
+The page's **Open pull request** and **Post review** buttons send the request to the Claude Code session that last loaded the page. If that session has ended, the panel shows the sentence to paste into a new session instead.
+
 ## How a review goes
 
-1. Open a pull request from the page (**Open pull request**), or ask Claude in the chat to load a pull request or a markdown file.
-2. Open the page. Press play, or click any section.
+1. Load a pull request: press **Open pull request** in the page, or tell Claude in the chat which pull request to review.
+2. Press play, or click any section.
 3. Take notes and make edits as you listen. Claude can read them back at any time.
 4. Press **Post review** in the page, or tell Claude "post my review". Claude shows what it will post and commit, and acts only after you confirm.
+
+## Installation
+
+Packaging as a Claude Code plugin is the next step, and installation instructions come with it. Until then, the tool runs from a Claude Code session that has this repository: ask Claude to publish `page/read-along-review.html` as a private page and to load a pull request with `tools/pr_loader.py`.
 
 ## Page features
 
