@@ -7,7 +7,7 @@ Status: **In review**, except where marked **Planned**
 - The review page is a private claude.ai page (an Artifact) owned by the reviewer. Claude publishes it the first time the reviewer asks for a review, and it keeps the same link afterwards.
 - The reviewer reopens it from the link, from their artifacts at claude.ai/code/artifacts (`/artifacts` in the terminal), or from their claude.ai sidebar when pinned.
 - In the Claude Code app, it can sit in the side pane next to the chat.
-- Other people can open it only if the reviewer shares it from the page's Share menu.
+- Other people can open it only if the reviewer shares it from the page's Share menu. They see it as **View only**: only the owner can load documents, add notes and edits, or post. See [security.md](../security.md).
 
 ## What needs Claude
 

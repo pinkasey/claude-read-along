@@ -38,7 +38,7 @@ Opening a box pauses reading. Saving an edit whose text is unchanged removes any
 
 | Page opened | Kept in | Visible to |
 | --- | --- | --- |
-| In claude.ai (normal use) | The page's shared database | People the page is shared with, and Claude when reading them back |
+| In claude.ai (normal use) | The page's shared database; only the page's owner can write it | People the page is shared with, and Claude when reading them back |
 | As a plain file, outside claude.ai | The browser's local storage | That browser only |
 
 While notes and edits are kept in the database, the header says "Saved for Claude · not posted".

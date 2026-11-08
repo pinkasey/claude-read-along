@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&family=Literata:opsz,wght@7..72,400;7..72,600;7..72,700&display=swap">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js" integrity="sha512-xeUh+KxNyTufZOje++oQHstlMQ8/rpyzPuM+gjMFYK3z5ILJGE7l2NvYL+XfliKURMpBIKKp1XoPN/qswlSMFA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js" integrity="sha512-jB0TkTBeQC9ZSkBqDhdmfTv1qdfbWpGE72yJ/01Srq6hEzZIz2xkz1e57p9ai7IeHMwEG7HpzG6NdptChif5Pg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <style>
 /* Layout: one reading column with a line-number gutter, a review rail on wide screens, a player bar pinned to the bottom. */
 :root {
@@ -308,7 +308,14 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
   // ---------- small helpers ----------
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const clean = (html) => (window.DOMPurify ? DOMPurify.sanitize(html) : esc(html));
+  // Markdown under review is untrusted. Besides scripts (DOMPurify's defaults), it may not draw
+  // controls or overlays, restyle the page, or take over the page's own element ids and classes.
+  const PURIFY = {
+    FORBID_TAGS: ["style", "form", "input", "button", "textarea", "select", "option", "label", "fieldset", "dialog", "iframe", "object", "embed", "svg", "math"],
+    FORBID_ATTR: ["style", "id", "class", "name", "tabindex", "accesskey", "autofocus"],
+  };
+  const clean = (html) => (window.DOMPurify ? DOMPurify.sanitize(html, PURIFY) : esc(html));
+  const ghLink = (u) => (/^https:\/\/github\.com\//.test(String(u || "")) ? String(u) : ""); // only real GitHub links
   const ls = {
     get(k, d) { try { const v = localStorage.getItem("mdr:" + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
     set(k, v) { try { localStorage.setItem("mdr:" + k, JSON.stringify(v)); } catch {} },
@@ -528,7 +535,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
       const gh = (u.comments || []).map((c) =>
         '<div class="gh-comment' + (isBot(c) ? " bot" : "") + (c.line ? "" : " outdated") + '" data-cid="' + esc(c.id) + '">' +
         '<div class="gh-head"><b>' + esc(c.author || "someone") + "</b>" + (isBot(c) ? '<span class="tag">bot · not read aloud</span>' : "") + (c.line ? "" : '<span class="tag">outdated</span>') +
-        (c.url ? '<a href="' + esc(c.url) + '" target="_blank" rel="noopener">on GitHub</a>' : "") + "</div>" +
+        (ghLink(c.url) ? '<a href="' + esc(ghLink(c.url)) + '" target="_blank" rel="noopener">on GitHub</a>' : "") + "</div>" +
         '<div class="gh-body">' + clean(marked.parse(commentBody(c))) + "</div></div>").join("");
       const cls = "unit t-" + u.type + (i === S.cur ? " active" : "") + (u.changed && S.hasChanges ? " changed" : "") + (changedOnly() && !readable(i) ? " dim" : "");
       return '<div class="' + cls + '" data-i="' + i + '" tabindex="-1">' +
@@ -567,7 +574,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
     const d = S.doc;
     $("docTitle").textContent = d ? d.title || firstHeading(d.markdown || "") || "Untitled document" : "Read-Along Review";
     const meta = [];
-    if (d && d.pr) meta.push(d.prUrl ? '<a href="' + esc(d.prUrl) + '" target="_blank" rel="noopener">' + esc(d.pr) + "</a>" : esc(d.pr));
+    if (d && d.pr) meta.push(ghLink(d.prUrl) ? '<a href="' + esc(ghLink(d.prUrl)) + '" target="_blank" rel="noopener">' + esc(d.pr) + "</a>" : esc(d.pr));
     if (d && d.path) meta.push(esc(d.path));
     if (d && S.units.length) meta.push(S.units.length + " sections");
     if (d && S.hasChanges) meta.push(S.units.filter((u) => u.changed).length + " changed");
@@ -588,7 +595,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
     $("chipNotes").textContent = S.notes.length + (S.notes.length === 1 ? " note" : " notes");
     const ne = Object.keys(S.edits).length;
     $("chipEdits").textContent = ne + (ne === 1 ? " edit" : " edits");
-    $("chipMode").textContent = S.mode === "shared" ? "Saved for Claude · not posted" : S.mode === "local" ? "Saved in this browser only" : "Connecting…";
+    $("chipMode").textContent = S.readOnly ? "View only" : S.mode === "shared" ? "Saved for Claude · not posted" : S.mode === "local" ? "Saved in this browser only" : "Connecting…";
   }
   function renderRail() {
     const items = [];
@@ -753,6 +760,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
   }
   const editId = (key, scope) => { scope = scope != null ? scope : (S.doc && S.doc.scope) || ""; return scope ? "e" + hashId(scope) + "~" + key : key; };
   async function saveDoc(d) {
+    if (S.readOnly) { toast("Only the page's owner can load documents."); return; }
     d.loadedAt = new Date().toISOString();
     d.docId = hashId(d.loadedAt + "|" + (d.path || "") + "|" + d.markdown.length + "|" + Math.random());
     if (S.mode === "shared") {
@@ -760,6 +768,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
     } else { S.meta = d; S.allNotes = []; S.allEdits = []; local.persist(); setDoc(); toast("Document loaded"); }
   }
   async function saveNote(u, text) {
+    if (S.readOnly) { toast("Only the page's owner can add notes."); return null; }
     const n = { key: u.key, line: u.line, endLine: u.endLine || u.line, anchor: unitLabel(u), text, createdAt: new Date().toISOString(), scope: S.doc.scope || "", file: S.doc.path || "", changed: !!u.changed };
     if (S.mode === "shared") {
       try { const ref = await S.db.collection("notes").add(n); n.id = ref.id; } catch (e) { toast("Note not saved: " + (e.message || e.code)); return null; }
@@ -772,6 +781,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
     else { S.allNotes = S.allNotes.filter((n) => n.id !== id); local.persist(); applyScope(); render(); }
   }
   async function saveEdit(u, text) {
+    if (S.readOnly) { toast("Only the page's owner can make edits."); return false; }
     const id = editId(u.key);
     const e = { id, key: u.key, line: u.line, endLine: u.endLine || u.line, original: u.own, text, updatedAt: new Date().toISOString(), scope: S.doc.scope || "", file: S.doc.path || "", changed: !!u.changed };
     if (S.mode === "shared") { try { await S.db.doc("edits/" + id).set(e); } catch (err) { toast("Edit not saved: " + (err.message || err.code)); return false; } }
@@ -790,7 +800,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
   // Position is shared so Claude knows what "this section" means when you talk to it in the chat.
   let posTimer = null, posWriting = false, posPending = null;
   function reportPosition() {
-    if (S.mode !== "shared") return;
+    if (S.mode !== "shared" || S.readOnly) return;
     const u = S.units[S.cur]; if (!u) return;
     posPending = { key: u.key, line: u.line, index: S.cur, text: unitLabel(u), file: S.doc.path || "", scope: S.doc.scope || "", at: new Date().toISOString() };
     clearTimeout(posTimer);
@@ -910,6 +920,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
     const de = e.target.closest("[data-del-edit]"); if (de) return deleteEdit(de.dataset.delEdit);
   });
   function openComposer(kind) {
+    if (S.readOnly) { toast("Only the page's owner can add notes and edits."); return; }
     const u = S.units[S.cur]; if (!u) return;
     pause();
     S.composer = { kind, key: u.key }; render();
@@ -1411,6 +1422,10 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
     // Each person's review defaults, private to them, in data/users/<their id>/.
     try {
       const user = window.claude && window.claude.use ? await window.claude.use("user") : null;
+      if (user) {
+        S.readOnly = !(await user.isOwner());
+        if (S.readOnly) { $("chipMode").textContent = "View only"; $("noteBtn").disabled = true; $("editBtn").disabled = true; $("loadBtn").hidden = true; $("postBtn").hidden = true; $("openPrBtn").hidden = true; }
+      }
       const id = user ? await user.id() : null;
       if (!id) return;
       S.settingsRef = db.doc("data/users/" + id + "/review-settings");

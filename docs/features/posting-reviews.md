@@ -35,7 +35,7 @@ Everything goes into one review (state "comment"; never "approve" or "request ch
 
 ## Confirmation
 
-- Before posting, Claude shows the plan: how many comments, suggestions and commits, and on which branch.
+- Before posting, Claude shows the plan: how many comments, suggestions and commits, on which branch, and every item with its file, line and text.
 - When the plan commits anything, Claude asks first: "Commit X edits as Y lines to BRANCH? Alternatively, post them as comments with suggested edits." with the choices **Commit inline** and **Suggest edits**. Nothing is committed without that answer, even when the request came from the page.
 
 ## Safety
@@ -45,6 +45,7 @@ Everything goes into one review (state "comment"; never "approve" or "request ch
 - After committing, Claude checks that every comment still lands inside the diff; any that do not move to the summary.
 - Pull requests from forks cannot be committed to. Their commit items become suggestions or summary entries, and Claude says so.
 - Suggestions and quoted text are fenced so that code blocks inside them stay intact.
+- Only markdown files the pull request adds or changes can be commented on or committed to; an item naming any other file is skipped with a warning. See [security.md](../security.md).
 
 ## After posting
 

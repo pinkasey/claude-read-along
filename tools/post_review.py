@@ -25,6 +25,7 @@ import sys
 from urllib.parse import quote
 
 MARKER = "<!-- review note -->"
+MD_EXT = (".md", ".markdown", ".mdx")
 LIST_ITEM = re.compile(r"^(\s*)([-*+]|\d+[.)])(\s+)(\[[ xX]\]\s+)?")
 
 
@@ -62,9 +63,13 @@ def hunks_from_patch(patch):
 
 
 def pr_state(repo, number):
+    """The pull request, and the diff ranges of the markdown files it adds or changes.
+    Only these files may be commented on or committed to: a path stored with a note or edit is
+    never trusted on its own."""
     pr = gh(f"repos/{repo}/pulls/{number}")
     files = gh(f"repos/{repo}/pulls/{number}/files?per_page=100", paginate=True)
-    return pr, {f["filename"]: hunks_from_patch(f.get("patch")) for f in files}
+    return pr, {f["filename"]: hunks_from_patch(f.get("patch")) for f in files
+                if f["filename"].lower().endswith(MD_EXT) and f["status"] != "removed"}
 
 
 def contents_url(repo, path):
@@ -129,6 +134,11 @@ def make_plan(a):
     prefix = f"{repo}#{number}:"
     notes = [n for n in load(a.data, "notes") if str(n.get("scope", "")).startswith(prefix)]
     edits = [e for e in load(a.data, "edits") if str(e.get("scope", "")).startswith(prefix)]
+    refused = [x for x in notes + edits if x.get("file") not in hunks or x.get("scope") != prefix + str(x.get("file"))]
+    for x in refused:
+        warnings.append(f"Skipped an item for {x.get('file')!r}: it is not a markdown file changed by this pull request.")
+    notes = [n for n in notes if n not in refused]
+    edits = [e for e in edits if e not in refused]
     texts = {}
 
     def text_of(path):
@@ -193,6 +203,12 @@ def describe(plan):
     if plan["commitItems"]:
         out.append(f"  Commits {plural(plan['commitItems'], 'item')} as {plural(plan['commitLines'], 'line')} "
                    f"in {', '.join(plan['commitFiles'])}")
+    labels = {"comment": "comment", "suggest": "suggested change", "commit": "commit",
+              "commit-marker": "commit marker + comment", "commit-comment": "commit + comment", "summary": "summary"}
+    out.append("Items:")
+    for x in sorted(plan["actions"], key=lambda x: (x["path"], x["line"])):
+        what = x["text"] if x["source"] == "note" else ("-> " + " / ".join(x["new"]) if x.get("new") else x["text"])
+        out.append(f"  [{labels[x['do']]}] {x['path']}:{x['line']} {x['source']}: {what}")
     for w in plan["warnings"]:
         out.append("  WARNING: " + w)
     return "\n".join(out)
@@ -227,6 +243,10 @@ def execute(plan_path):
     pr = gh(f"repos/{repo}/pulls/{number}")
     if pr["head"]["sha"] != plan["headSha"]:
         raise SystemExit("The pull request changed since the plan was made. Make a new plan.")
+    _, allowed = pr_state(repo, number)
+    stray = sorted({x["path"] for x in plan["actions"] if x["path"] not in allowed})
+    if stray:  # the plan file was changed, or the pull request's files changed: refuse rather than guess
+        raise SystemExit(f"The plan names files this pull request does not change: {', '.join(stray)}. Make a new plan.")
     actions = plan["actions"]
     head = plan["headSha"]
     mapping, commits = {}, []
