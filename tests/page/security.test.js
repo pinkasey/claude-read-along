@@ -78,7 +78,10 @@ test("an old single document gets an identity, and its scope-less items move to 
     "notes/old": { key: "L7", line: 7, text: "old comment" },
     "edits/L9": { key: "L9", line: 9, original: "This document proposes replacing the global limit with per-tenant limits, enforced at the gateway, with a small shared burst pool.", text: "Replaced." },
   } });
-  const docId = (await t.store("docs/current")).docId;
+  // It also moves into the kept reviews, and docs/current points to it.
+  const cur = await t.store("docs/current");
+  assert.match(cur.reviewId, /^r[0-9a-f]{12}$/);
+  const docId = (await t.store("reviews/" + cur.reviewId)).docId;
   assert.match(docId, /^[0-9a-f]{16}$/);
   assert.equal((await t.store("notes/old")).scope, "doc:" + docId);
   assert.equal((await t.store("edits/L9")).scope, "doc:" + docId);

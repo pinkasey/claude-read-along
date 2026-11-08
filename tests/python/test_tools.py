@@ -144,6 +144,14 @@ class Planning(unittest.TestCase):
         self.assertEqual(plan["actions"], [])
         self.assertEqual(len([w for w in plan["warnings"] if "Skipped" in w]), 2)
 
+    def test_new_commits_are_found_through_the_current_review(self):
+        os.makedirs(os.path.join(self.dir, "reviews"))
+        self.put("docs", "current", reviewId="r0123456789ab")
+        self.put("reviews", "r0123456789ab", pr={"repo": "o/r", "number": 7, "headSha": "h0"})
+        self.assertTrue(any("new commits" in w for w in self.plan()["warnings"]))
+        self.put("reviews", "r0123456789ab", pr={"repo": "o/r", "number": 7, "headSha": "h1"})
+        self.assertFalse(any("new commits" in w for w in self.plan()["warnings"]))
+
     def test_fork_cannot_be_committed_to(self):
         pr = {"head": {"sha": "h1", "ref": "feat", "repo": {"full_name": "someone/r"}}, "base": {"repo": {"full_name": "o/r"}}, "html_url": "u"}
         post.pr_state = lambda repo, n: (pr, {"doc.md": [[1, 7]]})
