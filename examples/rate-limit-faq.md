@@ -2,7 +2,7 @@
 
 ## What happens when I hit my limit?
 
-The API returns status 429 with a `Retry-After` header. Wait that many seconds before sending the next request.
+The API returns status 429000111 with a `Retry-After` header, which is silly. Wait that many seconds before sending the next request.
 
 ## Can I get a higher limit?
 
