@@ -157,7 +157,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
 /* Voice command box */
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .cmd-row { display: flex; gap: 8px; align-items: center; }
-.cmd-row .mic { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: var(--muted); border: 1px solid var(--line); cursor: pointer; }
+.cmd-row .mic { flex: none; padding: 0; background: var(--surface); width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: var(--muted); border: 1px solid var(--line); cursor: pointer; }
 .cmd-row .mic svg { width: 18px; height: 18px; fill: currentColor; }
 .cmd-row.live .mic { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
 #cmdIn { flex: 1 1 auto; min-width: 0; min-height: 40px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; background: var(--bg); font-size: 15px; }
@@ -256,7 +256,8 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
     <div class="now"><span class="where" id="nowWhere">—</span><span class="what" id="nowWhat">Press play or click any section to start reading.</span></div>
     <div class="progress" aria-hidden="true"><div id="progressBar"></div></div>
     <div class="cmd-row" id="cmdRow">
-      <label for="cmdIn" class="mic" title="Voice commands"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11z"/></svg><span class="sr">Voice command</span></label>
+      <button type="button" class="mic" id="micBtn" aria-pressed="false" title="Voice mode: keep the cursor in the command box"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11z"/></svg><span class="sr">Voice mode</span></button>
+      <label for="cmdIn" class="sr">Voice command</label>
       <input id="cmdIn" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" placeholder="Click here, press Win+H, then speak a command">
       <button class="btn small" id="cmdHelpBtn" aria-expanded="false" aria-controls="cmdHelp">Commands</button>
     </div>
@@ -957,24 +958,36 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
   let sampleFn = null, samplePromise = null;
 
   function feedback(msg, kind) { cmdFb.textContent = msg; cmdFb.className = "cmd-feedback" + (kind ? " " + kind : ""); }
+  // Take the cursor back only while the person is working inside this page. When they click
+  // outside it (for example into Claude's chat box beside it), the page lets go.
   function refocusCmd() {
     setTimeout(() => {
-      if (!voiceMode) return;
+      if (!voiceMode || !document.hasFocus()) return;
       const a = document.activeElement;
       if (a === cmdIn) return;
       if (a && a.matches && a.matches("textarea, select, input[type=text], input[type=file]")) return; // you're typing or choosing somewhere else
       cmdIn.focus({ preventScroll: true });
     }, 120);
   }
-  cmdIn.addEventListener("focus", () => { voiceMode = true; $("cmdRow").classList.add("live"); });
-  cmdIn.addEventListener("blur", () => { $("cmdRow").classList.remove("live"); refocusCmd(); });
-  // While voice mode is on, clicks on sections and buttons don't take the cursor out of the command box.
+  function setVoiceMode(on) {
+    voiceMode = on;
+    $("cmdRow").classList.toggle("live", on);
+    $("micBtn").setAttribute("aria-pressed", String(on));
+    $("micBtn").title = on ? "Voice mode is on. Press to turn it off (or Esc)" : "Voice mode: keep the cursor in the command box";
+    if (on) cmdIn.focus({ preventScroll: true });
+    else { clearTimeout(cmdTimer); if (document.activeElement === cmdIn) cmdIn.blur(); }
+  }
+  $("micBtn").addEventListener("click", () => setVoiceMode(!voiceMode));
+  cmdIn.addEventListener("focus", () => { if (!voiceMode) setVoiceMode(true); });
+  cmdIn.addEventListener("blur", () => refocusCmd());
+  // While voice mode is on, clicking a section or a player button doesn't take the cursor out of the command box.
+  const KEEP = ".unit, .player button, .rail button";
   document.addEventListener("mousedown", (e) => {
-    if (!voiceMode) return;
-    if (e.target.closest("textarea, input, select, label, .composer, .panel")) return;
-    e.preventDefault();
+    if (!voiceMode || e.target.closest("textarea, input, select, .composer, .panel, a")) return;
+    if (e.target.closest(KEEP) && e.target.closest("#micBtn") === null) e.preventDefault();
   }, true);
-  document.addEventListener("change", (e) => { if (voiceMode && e.target !== cmdIn) refocusCmd(); });
+  document.addEventListener("click", (e) => { if (voiceMode && e.target.closest(KEEP) && !e.target.closest("#micBtn")) refocusCmd(); }, true);
+  document.addEventListener("change", (e) => { if (voiceMode && e.target !== cmdIn && e.target.type === "checkbox") refocusCmd(); });
 
   cmdIn.addEventListener("input", () => {
     const v = cmdIn.value.trim();
@@ -989,7 +1002,13 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
   });
   cmdIn.addEventListener("keydown", (e) => {
     if (e.key === "Enter") { e.preventDefault(); clearTimeout(cmdTimer); runCommandText(); }
-    else if (e.key === "Escape") { voiceMode = false; clearTimeout(cmdTimer); cmdIn.value = ""; feedback(""); cmdIn.blur(); }
+    else if (e.key === "Escape") { cmdIn.value = ""; feedback(""); setVoiceMode(false); }
+    else if (!cmdIn.value && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      // An empty box: the playback keys still work.
+      if (e.key === " ") { e.preventDefault(); toggle(); }
+      else if (e.key === "ArrowRight") { e.preventDefault(); next(); }
+      else if (e.key === "ArrowLeft") { e.preventDefault(); prev(); }
+    }
   });
   $("cmdHelpBtn").addEventListener("click", () => {
     const h = $("cmdHelp"); h.hidden = !h.hidden; $("cmdHelpBtn").setAttribute("aria-expanded", String(!h.hidden));
