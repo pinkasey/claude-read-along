@@ -53,5 +53,6 @@ These limits shape the design and are not expected to change soon.
 | Packaging as a Claude Code plugin, installation | Shipped ([#3](https://github.com/pinkasey/claude-read-along/pull/3)) |
 | Reading a repository or folder without a pull request; the draft review pull request | Shipped ([#9](https://github.com/pinkasey/claude-read-along/pull/9)) |
 | README screenshots and demo | Shipped ([#9](https://github.com/pinkasey/claude-read-along/pull/9)) |
+| Showing front matter and `<!-- comments -->` | In review |
 | Sending requests from the page to Claude | Known issue: claude.ai refuses the connector call; paste the request into the chat instead |
 | The page starting its own Claude session when none is available | Planned (depends on the platform allowing it) |
