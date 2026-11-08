@@ -4,11 +4,14 @@ Status: **In review**
 
 ## Installing
 
-Read-Along is installed as a Claude Code plugin from this repository, which is also its marketplace:
+Read-Along is installed as a Claude Code plugin from this repository, which is also its marketplace. The browser comes first, since most reviewers use Claude Code on the web:
 
+- browser (claude.ai): **Customize**, **Plugins**, **Add**, **Add marketplace** `pinkasey/claude-read-along`, then add **read-along**; new web sessions have it.
 - terminal: `/plugin install read-along --marketplace pinkasey/claude-read-along`
 - shell: `claude plugin install read-along --marketplace pinkasey/claude-read-along`
 - desktop app: **+**, **Plugins**, **Add marketplace** `pinkasey/claude-read-along`, **Add plugin**
+
+In a Claude Code session on the web, `/plugin` does not run and plugins declared in a repository's `.claude/settings.json` do not load, so the browser steps are the way in.
 
 The plugin is named `read-along`; the marketplace is named `claude-read-along`. It contains one skill, `review`, which the reviewer can call as `/read-along:review` or reach by asking for a review in their own words.
 

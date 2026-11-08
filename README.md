@@ -8,7 +8,16 @@ It works with GitHub pull requests (changed sections, existing review comments, 
 
 ## Installation
 
-Read-Along is a Claude Code plugin. In a Claude Code terminal session:
+### In the browser (claude.ai, Claude Code on the web)
+
+1. On claude.ai, open **Customize**, then **Plugins**.
+2. Choose **Add**, then **Add marketplace**, and enter `pinkasey/claude-read-along`.
+3. Add the **read-along** plugin from that marketplace.
+4. Start a new Claude Code session on the web; the plugin is available there.
+
+### In a terminal
+
+In a Claude Code terminal session:
 
 ```text
 /plugin install read-along --marketplace pinkasey/claude-read-along
@@ -21,6 +30,8 @@ claude plugin install read-along --marketplace pinkasey/claude-read-along
 ```
 
 Answer `y` to add the marketplace, then choose where to install it (your user scope makes it available everywhere). In the Claude desktop app, where `/plugin` does not run: click **+** next to the prompt box, then **Plugins**, **Add marketplace** with `pinkasey/claude-read-along`, then **Add plugin**.
+
+`/plugin` commands do not run inside a Claude Code session on the web, and plugins declared in a repository's `.claude/settings.json` do not load there; use the browser steps above.
 
 ### Requirements
 
