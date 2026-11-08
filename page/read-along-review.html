@@ -1,6 +1,6 @@
 <title>Read-Along Review</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="read-along-version" content="0.1.6">
+<meta name="read-along-version" content="0.2.0">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&family=Literata:opsz,wght@7..72,400;7..72,600;7..72,700&display=swap">
@@ -285,7 +285,7 @@ header.top.folded .fold svg { transform: rotate(180deg); }
       <span class="chip edit" id="chipEdits">0 edits</span>
       <span class="chip mode" id="chipMode" title="Where your comments and edits are kept">Connecting…</span>
       <button class="btn small rail-toggle" id="railToggle" aria-expanded="false" aria-controls="rail">Review list</button>
-      <button class="btn small" id="openPrBtn">Open pull request</button>
+      <button class="btn small" id="openPrBtn">Open PR or repo</button>
       <button class="btn small" id="loadBtn">Load file</button>
       <button class="btn small primary" id="postBtn">Post review</button>
     </div>
@@ -627,6 +627,7 @@ header.top.folded .fold svg { transform: rotate(180deg); }
     $("docTitle").textContent = d ? d.title || firstHeading(d.markdown || "") || "Untitled document" : "Read-Along Review";
     const meta = [];
     if (d && d.pr) meta.push(ghLink(d.prUrl) ? '<a href="' + esc(ghLink(d.prUrl)) + '" target="_blank" rel="noopener">' + esc(d.pr) + "</a>" : esc(d.pr));
+    if (d && d.reviewPr && ghLink(d.reviewPr.url)) meta.push('<a href="' + esc(ghLink(d.reviewPr.url)) + '" target="_blank" rel="noopener">review PR #' + esc(d.reviewPr.number) + (d.reviewPr.draft ? " (draft)" : "") + "</a>");
     if (d && d.path) meta.push(esc(d.path));
     if (d && S.units.length) meta.push(S.units.length + " sections");
     if (d && S.hasChanges) meta.push(S.units.filter((u) => u.changed).length + " changed");
@@ -819,6 +820,10 @@ header.top.folded .fold svg { transform: rotate(180deg); }
     load() { S.meta = ls.get("doc", null); S.allNotes = ls.get("notes", []); S.allEdits = Object.values(ls.get("edits", {})); },
     persist() { ls.set("doc", S.meta); ls.set("notes", S.allNotes); const m = {}; S.allEdits.forEach((e) => (m[e.id || e.key] = e)); ls.set("edits", m); },
   };
+  // Comments and edits are scoped to the review they belong to: a pull request (owner/repo#N), a
+  // repository review (owner/repo@branch, which keeps its scope after its review pull request exists),
+  // or a loaded document set.
+  function scopeBase(m) { return m.repo ? m.repo.repo + "@" + m.repo.ref : m.pr ? m.pr.repo + "#" + m.pr.number : "docs"; }
   function composeDoc() {
     const m = S.meta;
     if (!m) { S.doc = null; return; }
@@ -828,18 +833,19 @@ header.top.folded .fold svg { transform: rotate(180deg); }
     if (!ids.includes(S.fileId)) S.fileId = ids.includes(remembered) ? remembered : (m.defaultFile && ids.includes(m.defaultFile) ? m.defaultFile : ids[0]);
     const f = S.files[S.fileId];
     const pr = m.pr || null;
-    if (!f) { S.doc = { title: m.title, path: "", pr: pr ? pr.repo + " #" + pr.number : "", prUrl: pr && pr.url, markdown: "", loading: true, scope: "" }; return; }
-    S.doc = {
+    const where = m.repo ? { pr: m.repo.repo + " @ " + m.repo.ref, prUrl: m.repo.url, reviewPr: m.reviewPr || null }
+      : { pr: pr ? pr.repo + " #" + pr.number : "", prUrl: pr && pr.url, reviewPr: null };
+    if (!f) { S.doc = Object.assign({ title: m.title, path: "", markdown: "", loading: true, scope: "" }, where); return; }
+    S.doc = Object.assign({
       title: m.title, path: f.path, markdown: f.markdown || "", status: f.status, added: f.added || null, comments: f.comments || [],
-      pr: pr ? pr.repo + " #" + pr.number : "", prUrl: pr && pr.url,
-      scope: (pr ? pr.repo + "#" + pr.number : "docs") + ":" + f.path,
-    };
+      scope: scopeBase(m) + ":" + f.path,
+    }, where);
   }
   // Scopes the reviewer can reach now: every file of the loaded pull request or document set,
   // or the single loaded document. Comments and edits in any other scope are listed as "Other documents".
   function reachableScopes() {
     const m = S.meta; if (!m) return new Set();
-    if (Array.isArray(m.files)) { const pre = (m.pr ? m.pr.repo + "#" + m.pr.number : "docs") + ":"; return new Set(m.files.map((f) => pre + f.path)); }
+    if (Array.isArray(m.files)) { const pre = scopeBase(m) + ":"; return new Set(m.files.map((f) => pre + f.path)); }
     return new Set([m.docId ? "doc:" + m.docId : ""]);
   }
   function orphans() {
@@ -1505,10 +1511,25 @@ header.top.folded .fold svg { transform: rotate(180deg); }
       if (perm === "prompt" || !known) { statusEl.textContent = "When you press the button, claude.ai asks you to allow this page to message Claude."; statusEl.className = "status"; }
     } catch { /* listing failed: let the button try, and report what happens */ }
   }
-  function parsePrRef(t) {
+  // A pull request (link, owner/repo#12, owner/repo 12) or a repository (owner/repo, owner/repo@branch,
+  // owner/repo@branch:folder, owner/repo:folder, or a github.com/owner/repo/tree/branch/folder link).
+  function parseRef(t) {
     t = String(t || "").trim();
-    const m = /github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)/i.exec(t) || /^([\w.-]+)\/([\w.-]+)\s*(?:#|\s+|\/pull\/)\s*(\d+)$/.exec(t);
-    return m ? { repo: m[1] + "/" + m[2], number: Number(m[3]) } : null;
+    let m = /github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)/i.exec(t) || /^([\w.-]+)\/([\w.-]+)\s*(?:#|\s+|\/pull\/)\s*(\d+)$/.exec(t);
+    if (m) return { kind: "pr", repo: m[1] + "/" + m[2], number: Number(m[3]) };
+    let repo, ref = "", folder = "";
+    if ((m = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/tree\/([\w.-]+)(?:\/([\w.\/ -]*))?\/?$/i.exec(t))) { repo = m[1] + "/" + m[2]; ref = m[3]; folder = m[4] || ""; }
+    else if ((m = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/i.exec(t))) repo = m[1] + "/" + m[2];
+    else if ((m = /^([\w.-]+)\/([\w.-]+)(?:@([\w.\/-]+?))?(?::([\w.\/ -]*))?$/.exec(t))) { repo = m[1] + "/" + m[2]; ref = m[3] || ""; folder = m[4] || ""; }
+    else return null;
+    folder = folder.replace(/^\/+|\/+$/g, "");
+    if (folder.split("/").includes("..")) return null;
+    return { kind: "repo", repo, ref, folder };
+  }
+  function loadSentence(r) {
+    if (r.kind === "pr") return "Load pull request " + r.repo + "#" + r.number + " into the Read-Along page.";
+    const parts = [r.ref ? "branch " + r.ref : "", r.folder ? "folder " + r.folder : ""].filter(Boolean);
+    return "Load repository " + r.repo + (parts.length ? " (" + parts.join(", ") + ")" : "") + " into the Read-Along page.";
   }
   function copyBtn(text) {
     const b = document.createElement("button"); b.className = "btn small"; b.type = "button"; b.textContent = "Copy";
@@ -1532,17 +1553,19 @@ header.top.folded .fold svg { transform: rotate(180deg); }
 
   function openPrPanel() {
     openPanel((p) => {
-      const cur = S.meta && S.meta.pr ? S.meta.pr.repo + "#" + S.meta.pr.number : "";
-      p.innerHTML = '<h2 id="panelTitle">Open a pull request</h2>' +
-        "<p>Claude loads the pull request's markdown files, what changed, and its review comments into this page.</p>" +
-        '<div class="field"><label for="prRef">Pull request link, or owner/repo#number</label><input type="text" id="prRef" autocomplete="off" spellcheck="false" placeholder="https://github.com/owner/repo/pull/12" value="' + esc(cur) + '"></div>' +
+      const m0 = S.meta;
+      const cur = m0 && m0.pr ? m0.pr.repo + "#" + m0.pr.number : m0 && m0.repo ? m0.repo.repo + "@" + m0.repo.ref + (m0.repo.folder ? ":" + m0.repo.folder : "") : "";
+      p.innerHTML = '<h2 id="panelTitle">Open a pull request or a repository</h2>' +
+        "<p>A pull request: Claude loads its markdown files, what changed, and its review comments. " +
+        "A repository: Claude loads its markdown files (from a branch, optionally one folder) to read without a pull request; when you post your review, Claude opens a draft pull request for it.</p>" +
+        '<div class="field"><label for="prRef">Pull request or repository</label><input type="text" id="prRef" autocomplete="off" spellcheck="false" placeholder="owner/repo#12, or owner/repo@main:docs" value="' + esc(cur) + '"></div>' +
         '<div class="say"><span id="prSay"></span></div>' +
         '<div class="row"><button class="btn primary" id="prGo">Ask Claude to load it</button><button class="btn" id="prClose">Close</button></div>' +
         '<div class="status" id="prStatus" aria-live="polite"></div>';
       const sayEl = p.querySelector("#prSay"), sayBox = p.querySelector(".say");
       const update = () => {
-        const r = parsePrRef(p.querySelector("#prRef").value);
-        sayEl.textContent = r ? "Load pull request " + r.repo + "#" + r.number + " into the Read-Along page." : "Enter a pull request link, or owner/repo#number.";
+        const r = parseRef(p.querySelector("#prRef").value);
+        sayEl.textContent = r ? loadSentence(r) : "Enter a pull request (owner/repo#12, or its link) or a repository (owner/repo, owner/repo@branch:folder).";
         const old = sayBox.querySelector("button"); if (old) old.remove();
         if (r) sayBox.appendChild(copyBtn(sayEl.textContent));
         return r;
@@ -1553,7 +1576,7 @@ header.top.folded .fold svg { transform: rotate(180deg); }
       p.querySelector("#prClose").addEventListener("click", closePanel);
       p.querySelector("#prGo").addEventListener("click", async () => {
         const r = update(), st = p.querySelector("#prStatus");
-        if (!r) { st.textContent = "That doesn't look like a pull request link or owner/repo#number."; st.className = "status warn"; return; }
+        if (!r) { st.textContent = "That doesn't look like a pull request or a repository."; st.className = "status warn"; return; }
         await sendToClaude("[Read-Along page] " + sayEl.textContent, st, p.querySelector("#prGo"));
       });
       checkConnector(p.querySelector("#prStatus"), p.querySelector("#prGo"));
@@ -1562,8 +1585,8 @@ header.top.folded .fold svg { transform: rotate(180deg); }
 
   // What posting would do, from the notes, the edits and each file's diff hunks.
   function computePlan() {
-    const pr = S.meta && S.meta.pr; if (!pr) return null;
-    const prefix = pr.repo + "#" + pr.number + ":";
+    const m = S.meta; if (!m || !(m.pr || m.repo)) return null;
+    const prefix = scopeBase(m) + ":";
     const byPath = {}; Object.values(S.files).forEach((f) => (byPath[f.path] = f));
     const inDiff = (path, a, b) => { const f = byPath[path]; return !!(f && Array.isArray(f.hunks) && f.hunks.some((h) => h[0] <= a && h[1] >= b)); };
     const notes = S.allNotes.filter((n) => (n.scope || "").startsWith(prefix));
@@ -1571,30 +1594,36 @@ header.top.folded .fold svg { transform: rotate(180deg); }
     const c = { noteIn: 0, noteOut: 0, editIn: 0, editOut: 0 };
     notes.forEach((n) => (inDiff(n.file, n.line, n.line) ? c.noteIn++ : c.noteOut++));
     edits.forEach((e) => (inDiff(e.file, e.line, e.endLine || e.line) ? c.editIn++ : c.editOut++));
-    return { pr, c, total: notes.length + edits.length };
+    const target = m.pr || m.reviewPr || null;
+    return { m, target, creating: !!m.repo && !m.reviewPr, c, total: notes.length + edits.length };
   }
   const plural = (n, w) => n + " " + w + (n === 1 ? "" : "s");
   function openPostPanel() {
     openPanel((p) => {
       const plan = computePlan();
       if (!plan) {
-        p.innerHTML = '<h2 id="panelTitle">Post review</h2><p>Posting works for pull requests. Open one with “Open pull request”. For a plain file, ask Claude in the chat to apply your edits to it.</p><div class="row"><button class="btn" id="pc">Close</button></div>';
+        p.innerHTML = '<h2 id="panelTitle">Post review</h2><p>Posting works for pull requests and repository reviews. Open one with “Open PR or repo”. For a plain file, ask Claude in the chat to apply your edits to it.</p><div class="row"><button class="btn" id="pc">Close</button></div>';
         p.querySelector("#pc").addEventListener("click", closePanel); return;
       }
       const draw = () => {
-        const st = S.reviewSettings, c = plan.c, pr = plan.pr;
-        const branch = pr.headRef || "the pull request branch";
+        const st = S.reviewSettings, c = plan.c, m = plan.m;
+        const branch = plan.target ? plan.target.headRef || "the pull request branch" : "a new branch";
         const L = [];
         if (c.noteIn) L.push(["", c.noteIn, plural(c.noteIn, "comment").replace(/^\d+ /, "") + " on changed lines → review comments on those lines"]);
         if (c.editIn) L.push(st.editMode === "commit" ? ["commit", c.editIn, plural(c.editIn, "edit").replace(/^\d+ /, "") + " on changed lines → committed to " + branch + (st.revert ? ", each with a one-click revert comment" : "")] : ["", c.editIn, plural(c.editIn, "edit").replace(/^\d+ /, "") + " on changed lines → suggested changes the author can apply"]);
         if (c.noteOut) L.push(st.outside === "anchor" ? ["commit", c.noteOut, plural(c.noteOut, "comment").replace(/^\d+ /, "") + " on unchanged lines → a <!-- review comment --> marker committed after the section, with the comment on it"] : ["", c.noteOut, plural(c.noteOut, "comment").replace(/^\d+ /, "") + " on unchanged lines → listed in the review summary"]);
         if (c.editOut) L.push(st.outside === "anchor" ? ["commit", c.editOut, plural(c.editOut, "edit").replace(/^\d+ /, "") + " on unchanged lines → committed to " + branch + (st.revert ? ", each with a one-click revert comment" : "")] : ["", c.editOut, plural(c.editOut, "edit").replace(/^\d+ /, "") + " on unchanged lines → listed in the review summary, before and after"]);
         const commits = L.some((l) => l[0] === "commit");
-        const ref = pr.repo + "#" + pr.number;
-        const sentence = "Post my review for " + ref + ".";
-        p.innerHTML = '<h2 id="panelTitle">Post review to ' + esc(ref) + "</h2>" +
+        const repoName = (m.pr || m.repo).repo;
+        const ref = plan.target ? repoName + "#" + plan.target.number : repoName;
+        const reviewed = m.repo ? [m.repo.ref ? "branch " + m.repo.ref : "", m.repo.folder ? "folder " + m.repo.folder : ""].filter(Boolean).join(", ") : "";
+        const sentence = "Post my review for " + ref + (plan.creating && reviewed ? " (" + reviewed + ")" : "") + ".";
+        const blocked = plan.creating && plan.total && !commits;
+        p.innerHTML = '<h2 id="panelTitle">' + (plan.creating ? "Create a review pull request in " : "Post review to ") + esc(ref) + "</h2>" +
+          (plan.creating ? "<p>Claude creates a branch from " + esc(m.repo.ref) + ", commits your edits (and markers for your comments), opens a <b>draft</b> pull request, and posts your comments on it. You can keep reading: later posts go to the same pull request.</p>" : "") +
           (plan.total ? '<div class="plan">' + L.map((l) => '<div class="pl ' + l[0] + '"><b>' + l[1] + "</b><span>" + esc(l[2]) + "</span></div>").join("") + "</div>"
-            : "<p>You have no comments or edits on this pull request yet.</p>") +
+            : "<p>You have no comments or edits on this review yet.</p>") +
+          (blocked ? '<div class="warnbox">A pull request needs at least one commit, and this review has none yet. Choose <b>Commit and comment</b> below, or add an edit.</div>' : "") +
           '<fieldset><legend>Edits on changed lines</legend>' +
           '<label class="opt"><input type="radio" name="em" value="suggest"' + (st.editMode === "suggest" ? " checked" : "") + '> Suggest edits<small>Review comments with suggested changes. The author applies them with one click.</small></label>' +
           '<label class="opt"><input type="radio" name="em" value="commit"' + (st.editMode === "commit" ? " checked" : "") + '> Commit inline<small>Claude commits the edits to the pull request branch.</small></label></fieldset>' +
@@ -1603,9 +1632,9 @@ header.top.folded .fold svg { transform: rotate(180deg); }
           '<label class="opt"><input type="radio" name="out" value="anchor"' + (st.outside === "anchor" ? " checked" : "") + '> Commit and comment<small>GitHub only takes comments on lines in the diff, so Claude commits a marker (for a comment) or your edited text (for an edit), and comments on it.</small></label></fieldset>' +
           '<label class="opt revert-opt"><input type="checkbox" id="revertChk"' + (st.revert ? " checked" : "") + '> Add revert comments to committed edits<small>Each edit Claude commits gets a comment with a one-click suggestion that puts the original text back.</small></label>' +
           '<p class="saved-note">' + (S.settingsRef ? "These choices are saved as your defaults, on every device." : "These choices are saved as your defaults in this browser.") + "</p>" +
-          (commits ? '<div class="warnbox">This review commits to <b>' + esc(branch) + "</b>. Claude asks you to confirm in the chat before committing anything.</div>" : "") +
+          (commits ? '<div class="warnbox">This review commits to <b>' + esc(branch) + "</b>" + (plan.creating ? " and opens a draft pull request" : "") + ". Claude asks you to confirm in the chat before committing anything.</div>" : "") +
           '<div class="say"><span>' + esc(sentence) + "</span></div>" +
-          '<div class="row"><button class="btn primary" id="postGo"' + (plan.total ? "" : " disabled") + '>Ask Claude to post</button><button class="btn" id="postClose">Close</button></div>' +
+          '<div class="row"><button class="btn primary" id="postGo"' + (plan.total && !blocked ? "" : " disabled") + ">" + (plan.creating ? "Ask Claude to create it" : "Ask Claude to post") + '</button><button class="btn" id="postClose">Close</button></div>' +
           '<div class="status" id="postStatus" aria-live="polite"></div>';
         p.querySelector(".say").appendChild(copyBtn(sentence));
         p.querySelectorAll("input[type=radio], #revertChk").forEach((r) => r.addEventListener("change", () => {
@@ -1617,7 +1646,7 @@ header.top.folded .fold svg { transform: rotate(180deg); }
           " Settings: edits on changed lines = " + (S.reviewSettings.editMode === "commit" ? "commit inline" : "suggest edits") +
           "; comments and edits on unchanged lines = " + (S.reviewSettings.outside === "anchor" ? "commit and comment" : "list in the summary") +
           "; revert comments on committed edits = " + (S.reviewSettings.revert ? "on" : "off") + ".", p.querySelector("#postStatus"), p.querySelector("#postGo")));
-        if (plan.total) checkConnector(p.querySelector("#postStatus"), p.querySelector("#postGo"));
+        if (plan.total && !blocked) checkConnector(p.querySelector("#postStatus"), p.querySelector("#postGo"));
       };
       draw();
     });

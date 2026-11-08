@@ -25,3 +25,7 @@ The page tests load `marked` and `DOMPurify` from cdnjs, so they need network ac
 | `tests/page/harness.js` | Serves the page over a local http server (as claude.ai serves it over https; a `file://` page's local storage is not reliably kept across reloads) and opens it with the stand-ins; `prFixture()` is a pull request with two files and review comments |
 | `tests/page/*.test.js` | Page tests, one file per area (reading, voice and edits, pull requests, panels, security) |
 | `tools/ci/check_repo.py` | The repository checks |
+
+## README screenshots and demo
+
+`docs/images/` holds the README's screenshots and animated demo. They are recorded from the real page with the test harness's stand-ins (speech advances on a timer), so regenerate them after a visible change to the page: `node tools/demo/record.js` (needs Playwright and `ffmpeg`).

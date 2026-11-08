@@ -6,7 +6,7 @@ Status: **Shipped**
 
 The reviewer either:
 
-- presses **Open pull request** in the page and enters a link (`https://github.com/OWNER/REPO/pull/N`), `OWNER/REPO#N` or `OWNER/REPO N`, then **Ask Claude to load it**, or
+- presses **Open PR or repo** in the page and enters a link (`https://github.com/OWNER/REPO/pull/N`), `OWNER/REPO#N` or `OWNER/REPO N`, then **Ask Claude to load it**, or
 - tells Claude in the chat which pull request to review.
 
 Claude runs `tools/pr_loader.py`, which collects, for every markdown file the pull request adds or changes (`.md`, `.markdown`, `.mdx`; removed files are skipped):
