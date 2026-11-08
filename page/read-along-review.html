@@ -1276,7 +1276,7 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
   S.sessionId = null;
   let mcpP = null;
   const getMcp = () => (mcpP = mcpP || (window.claude && window.claude.use ? window.claude.use("mcp") : Promise.resolve(null)).catch(() => null));
-  async function sendToClaude(message, statusEl) {
+  async function sendToClaude(message, statusEl, btn) {
     const say = (t, k) => { statusEl.textContent = t; statusEl.className = "status" + (k ? " " + k : ""); };
     const mcp = await getMcp();
     if (!mcp || !S.sessionId) { say("This page can't message Claude directly here. Copy the sentence above into the chat.", "warn"); return false; }
@@ -1284,16 +1284,37 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
     try {
       await mcp.callTool("Claude Code Remote", "send_message", { session_id: S.sessionId, message });
       say("Sent. Claude is working on it in the chat.", "ok");
+      if (btn) btn.dataset.label && (btn.textContent = btn.dataset.label);
       return true;
     } catch (e) {
       const c = e && e.code;
+      const detail = e && e.message ? " Details: " + String(e.message).slice(0, 200) : "";
       const msg = c === "needs_reauth" || c === "server_not_connected" || c === "selection_required" ? "The Claude Code connector isn't connected for you. Copy the sentence above into the chat instead."
-        : c === "approval_required" || c === "not_granted" || c === "consent_required" || c === "cancelled" ? "Sending to Claude needs your permission. Allow it when asked, or copy the sentence above into the chat."
-        : c === "tool_error" ? "Claude's session didn't take the message (it may have ended). Copy the sentence above into the chat."
-        : "Couldn't send (" + (c || "error") + "). Copy the sentence above into the chat.";
+        : c === "approval_required" || c === "not_granted" || c === "consent_required" || c === "cancelled" ? "Sending to Claude needs your permission. Press the button again and allow it when claude.ai asks, or copy the sentence above into the chat."
+        : c === "blocked_by_policy" || c === "not_in_manifest" ? "Your account doesn't allow this page to message Claude. Copy the sentence above into the chat."
+        : c === "tool_error" ? "Claude's session didn't take the message (it may have ended). Copy the sentence above into the chat." + detail
+        : e && e.retryable ? "Couldn't reach Claude just now (" + c + "). Press “Try again”, or copy the sentence above into the chat." + detail
+        : "Couldn't send (" + (c || "error") + "). Copy the sentence above into the chat." + detail;
       say(msg, "warn");
+      // A retry is a new press of the button, never automatic: a failed send may still have arrived.
+      if (btn && (e && e.retryable || ["approval_required", "consent_required", "cancelled"].includes(c))) { btn.dataset.label = btn.dataset.label || btn.textContent; btn.textContent = "Try again"; }
       return false;
     }
+  }
+  // When a panel opens, say up front if this page can't message Claude for this person.
+  async function checkConnector(statusEl, btn) {
+    const mcp = await getMcp();
+    if (!mcp) { statusEl.textContent = "This page can't message Claude here. Copy the sentence above into the chat."; statusEl.className = "status warn"; btn.disabled = true; return; }
+    if (!S.sessionId) { statusEl.textContent = "No Claude session is linked to this page yet. Copy the sentence above into a chat with Claude."; statusEl.className = "status warn"; btn.disabled = true; return; }
+    try {
+      const r = await mcp.listTools("Claude Code Remote");
+      const srv = (r.servers || [])[0];
+      if (!srv) { statusEl.textContent = "The Claude Code connector isn't available to this page for you. Copy the sentence above into the chat."; statusEl.className = "status warn"; btn.disabled = true; return; }
+      const known = srv.authStatus !== "unknown";
+      if (known && !srv.tools.some((t) => t.name === "send_message")) { statusEl.textContent = "Your Claude Code connector doesn't let pages send messages. Copy the sentence above into the chat."; statusEl.className = "status warn"; btn.disabled = true; return; }
+      if (srv.authStatus === "needs_reauth") { statusEl.textContent = "The Claude Code connector needs you to sign in again (Settings, Connectors). Meanwhile, copy the sentence above into the chat."; statusEl.className = "status warn"; }
+      if (!known) { statusEl.textContent = "The first time, claude.ai asks you to allow this page to message Claude."; statusEl.className = "status"; }
+    } catch { /* listing failed: let the button try, and report what happens */ }
   }
   function parsePrRef(t) {
     t = String(t || "").trim();
@@ -1344,8 +1365,9 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
       p.querySelector("#prGo").addEventListener("click", async () => {
         const r = update(), st = p.querySelector("#prStatus");
         if (!r) { st.textContent = "That doesn't look like a pull request link or owner/repo#number."; st.className = "status warn"; return; }
-        await sendToClaude("[Read-Along page] " + sayEl.textContent, st);
+        await sendToClaude("[Read-Along page] " + sayEl.textContent, st, p.querySelector("#prGo"));
       });
+      checkConnector(p.querySelector("#prStatus"), p.querySelector("#prGo"));
     });
   }
 
@@ -1403,7 +1425,8 @@ main .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 28
         p.querySelector("#postClose").addEventListener("click", closePanel);
         p.querySelector("#postGo").addEventListener("click", () => sendToClaude("[Read-Along page] " + sentence +
           " Settings: edits on changed lines = " + (S.reviewSettings.editMode === "commit" ? "commit inline" : "suggest edits") +
-          "; notes and edits on unchanged lines = " + (S.reviewSettings.outside === "anchor" ? "commit and comment" : "list in the summary") + ".", p.querySelector("#postStatus")));
+          "; notes and edits on unchanged lines = " + (S.reviewSettings.outside === "anchor" ? "commit and comment" : "list in the summary") + ".", p.querySelector("#postStatus"), p.querySelector("#postGo")));
+        if (plan.total) checkConnector(p.querySelector("#postStatus"), p.querySelector("#postGo"));
       };
       draw();
     });
