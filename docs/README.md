@@ -1,0 +1,28 @@
+# Read-Along documentation
+
+These documents describe how Read-Along behaves: what it is for, what each part does, and the rules it follows. They are the reference for building and reviewing changes. The code should match them, and a change in behavior changes them in the same pull request.
+
+| Document | What it covers |
+| --- | --- |
+| [product.md](product.md) | The problem, who it is for, goals, non-goals, principles, and the platform limits the design works within |
+| [features/reading.md](features/reading.md) | Listening: sections, highlighting, navigation, speed, voices, outline, keyboard |
+| [features/voice-commands.md](features/voice-commands.md) | The command box, voice mode, and every command |
+| [features/notes-and-edits.md](features/notes-and-edits.md) | Review notes and edits: where they attach, how they are kept apart per document, undo |
+| [features/pull-requests.md](features/pull-requests.md) | Loading a pull request: files, changed sections, existing review comments |
+| [features/posting-reviews.md](features/posting-reviews.md) | Posting a review: the two settings, what gets commented or committed, confirmation |
+| [features/page-and-sessions.md](features/page-and-sessions.md) | Where the page lives, what needs a Claude session, how the page and Claude talk, stored data |
+
+## Status labels
+
+Each feature document marks its parts:
+
+- **Shipped**: built and on the default branch.
+- **In review**: built, in an open pull request.
+- **Planned**: agreed, not built yet.
+
+## Adding a feature
+
+1. Add a section to the feature document it belongs to, or a new file under `features/` when it is a new area. Link a new file from the table above.
+2. Describe behavior from the reviewer's side: what they do, what they see and hear, and the rules the feature follows. Write each rule so it can be checked.
+3. Mark it **Planned** until the code lands, then update the status in the pull request that builds it.
+4. When a feature changes a rule in another document, change that document too.

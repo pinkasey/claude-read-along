@@ -12,6 +12,7 @@ It works with a pull request (changed sections, existing review comments, severa
 | `tools/pr_loader.py` | Fetches a pull request's markdown files, changed lines and review comments with `gh`, and writes them as JSON documents for the page's database. Also loads plain local files. |
 | `tools/post_review.py` | Posts a review to its pull request in two steps: `plan` (changes nothing) and `execute`. |
 | `examples/sample-design-doc.md` | A sample design document to try it on. |
+| `docs/` | How Read-Along behaves: the product overview and one document per feature area. Start at [docs/README.md](docs/README.md). |
 
 ## Getting to the page
 
