@@ -36,6 +36,30 @@ test("reads sentence by sentence, highlights the spoken sentence, and continues"
   await t.close();
 });
 
+test("pause and play resume from the word where reading stopped", async () => {
+  const t = await open({ local: SAMPLE_LOCAL });
+  await t.page.click('.unit[data-i="3"]'); await t.page.waitForTimeout(150);
+  const sentence = await t.lastSpoken();
+  const at = sentence.indexOf("global");
+  await t.q((i) => window.__last.onboundary({ name: "word", charIndex: i }), at); // the browser reports the word it reached
+  await t.page.click("#playBtn"); // pause
+  await t.page.click("#playBtn"); await t.page.waitForTimeout(150); // play
+  assert.equal(await t.lastSpoken(), sentence.slice(at));
+  assert.equal(await t.highlighted(), sentence, "the whole sentence stays highlighted");
+  // Pausing again inside the resumed part keeps counting from the sentence's start.
+  await t.q(() => window.__last.onboundary({ name: "word", charIndex: 12 }));
+  await t.page.click("#playBtn"); await t.page.click("#playBtn"); await t.page.waitForTimeout(150);
+  assert.equal(await t.lastSpoken(), sentence.slice(at + 12));
+  // Moving elsewhere forgets it: the next sentence starts at its start.
+  await t.q(() => window.__last.onboundary({ name: "word", charIndex: 4 }));
+  await t.page.click("#playBtn"); await t.q(() => document.activeElement.blur());
+  await t.page.keyboard.press("ArrowRight"); await t.page.keyboard.press("ArrowLeft");
+  assert.equal(await t.q(() => window.__spoken.length), 3, "stepping while paused does not speak");
+  await t.page.click("#playBtn"); await t.page.waitForTimeout(150);
+  assert.equal(await t.lastSpoken(), sentence);
+  await t.close();
+});
+
 test("tables, code and task items are spoken in words", async () => {
   const t = await open({ local: SAMPLE_LOCAL });
   const speak = async (line) => {
