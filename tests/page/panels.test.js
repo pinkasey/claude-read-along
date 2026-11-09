@@ -81,3 +81,36 @@ for (const [name, opts, onOpen, afterPress, sends] of connectorCases) {
     await t.close();
   });
 }
+
+test("requests go to Claude as a comment sent to the watching session, named in the message", async () => {
+  const t = await open({ db: withItems(), comments: { state: "available" } });
+  await t.page.click("#openPrBtn"); await t.page.waitForTimeout(100);
+  assert.match(await t.page.textContent("#prStatus"), /posts this as a comment on the page and sends it to Claude/);
+  await t.page.fill("#prRef", "o/r#8");
+  await t.page.click("#prGo"); await t.page.waitForTimeout(150);
+  assert.deepEqual(await t.q(() => window.__commentSends), [{ anchor: { el: "docTitle" },
+    text: "[Read-Along page] Load pull request o/r#8 into the Read-Along page. (For Claude session session_test.)" }]);
+  assert.deepEqual(await t.q(() => window.__sent), [], "the connector is not used");
+  assert.match(await t.page.textContent("#prStatus"), /^Sent\./);
+  await t.page.click("#prClose");
+  await t.page.click("#postBtn"); await t.page.waitForTimeout(100);
+  await t.page.click("#postGo"); await t.page.waitForTimeout(150);
+  assert.match((await t.q(() => window.__commentSends))[1].text, /^\[Read-Along page\] Post my review for o\/r#7\. Settings: .*\(For Claude session session_test\.\)$/);
+  await t.close();
+});
+
+test("with no Claude session watching the page, the button is off and the sentence is offered", async () => {
+  const t = await open({ db: withItems(), comments: { state: "no_session" } });
+  await t.page.click("#openPrBtn"); await t.page.waitForTimeout(100);
+  assert.match(await t.page.textContent("#prStatus"), /No Claude session is watching this page/);
+  assert.equal(await t.page.isDisabled("#prGo"), true);
+  await t.close();
+});
+
+test("a refused send says why and posts nothing", async () => {
+  const t = await open({ db: withItems(), comments: { state: "available", fail: { code: "claude_unavailable" } } });
+  await t.page.click("#openPrBtn"); await t.page.waitForTimeout(100);
+  await t.page.click("#prGo"); await t.page.waitForTimeout(150);
+  assert.match(await t.page.textContent("#prStatus"), /No Claude session is watching this page right now/);
+  await t.close();
+});

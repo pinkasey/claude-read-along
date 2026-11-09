@@ -110,8 +110,15 @@ function stands(o) {
     manage: async () => {},
   } : null;
   const sample = o.sample != null ? async () => { await new Promise((r) => setTimeout(r, o.sampleDelay || 10)); return { text: o.sample }; } : null;
+  // Comments: only when the test gives o.comments = {state, fail}; sends are recorded in __commentSends.
+  window.__commentSends = [];
+  const comments = o.comments ? {
+    canSendToClaude: async () => o.comments.state,
+    anchorFor: async (el) => ({ el: el.id || el.tagName }),
+    sendToClaude: async (t) => { if (o.comments.fail) throw o.comments.fail; window.__commentSends.push(t); return { threadId: "t1", commentId: "c1" }; },
+  } : null;
   window.claude = {
-    use: async (name) => ({ db, user, mcp, permissions: perms, sample })[name] || null,
+    use: async (name) => ({ db, user, mcp, permissions: perms, sample, comments })[name] || null,
   };
 }
 
@@ -123,7 +130,7 @@ async function open(opts = {}) {
   page.on("pageerror", (e) => errors.push(e.message));
   await page.addInitScript(stands, {
     db: opts.db || null, local: opts.local || null, owner: opts.owner, connector: opts.connector, permission: opts.permission,
-    sample: opts.sample == null ? null : opts.sample, sampleDelay: opts.sampleDelay, writesRefused: opts.writesRefused,
+    sample: opts.sample == null ? null : opts.sample, comments: opts.comments || null, sampleDelay: opts.sampleDelay, writesRefused: opts.writesRefused,
   });
   await page.goto((await baseUrl()) + "page.html");
   await page.waitForTimeout(opts.settle || 500);

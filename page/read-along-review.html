@@ -1,6 +1,6 @@
 <title>Read-Along Review</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="read-along-version" content="0.4.1">
+<meta name="read-along-version" content="0.4.2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500&family=Literata:opsz,wght@7..72,400;7..72,600;7..72,700&display=swap">
@@ -1605,8 +1605,35 @@ header.top.folded .fold svg { transform: rotate(180deg); }
   const sessionFor = () => (S.meta && typeof S.meta.sessionId === "string" && S.meta.sessionId) || S.sessionId;
   let mcpP = null;
   const getMcp = () => (mcpP = mcpP || (window.claude && window.claude.use ? window.claude.use("mcp") : Promise.resolve(null)).catch(() => null));
+  // The page reaches Claude by posting the request as a comment on the page and sending it to Claude:
+  // the platform wakes the Claude sessions watching the page. The message names the review's session,
+  // so only that one acts. The connector's send_message is a fallback (claude.ai refuses it so far).
+  let commentsP = null;
+  const getComments = () => (commentsP = commentsP || (window.claude && window.claude.use ? window.claude.use("comments") : Promise.resolve(null)).catch(() => null));
+  async function commentRoute() {
+    const c = await getComments(); if (!c) return { c: null, state: "off" };
+    try { return { c, state: await c.canSendToClaude() }; } catch { return { c, state: "off" }; }
+  }
+  const addressed = (message) => { const id = sessionFor(); return message + (id ? " (For Claude session " + id + ".)" : ""); };
   async function sendToClaude(message, statusEl, btn) {
     const say = (t, k) => { statusEl.textContent = t; statusEl.className = "status" + (k ? " " + k : ""); };
+    const route = await commentRoute();
+    if (route.state === "available") {
+      say("Sending to Claude…");
+      try {
+        const anchor = await route.c.anchorFor($("docTitle"));
+        await route.c.sendToClaude({ anchor, text: addressed(message) });
+        say("Sent. Claude answers in the page's comments and does the work in its session.", "ok");
+        return true;
+      } catch (e) {
+        const c = e && e.code;
+        say(c === "consent_required" || c === "forbidden" ? "Sending needs your permission to comment on this page. Press the button again and allow it, or copy the sentence above into the chat."
+          : c === "claude_unavailable" ? "No Claude session is watching this page right now. Copy the sentence above into a chat with Claude."
+          : c === "rate_limited" ? "Too many sends in a row. Wait a moment and press the button again."
+          : "Couldn't send (" + (c || "error") + "). Copy the sentence above into the chat.", "warn");
+        return false;
+      }
+    }
     const mcp = await getMcp();
     const sessionId = sessionFor();
     if (!mcp || !sessionId) { say("This page can't message Claude directly here. Copy the sentence above into the chat.", "warn"); return false; }
@@ -1662,6 +1689,9 @@ header.top.folded .fold svg { transform: rotate(180deg); }
   }
   // When a panel opens, say up front if this page can't message Claude for this person.
   async function checkConnector(statusEl, btn) {
+    const route = await commentRoute();
+    if (route.state === "available") { statusEl.textContent = "The button posts this as a comment on the page and sends it to Claude."; statusEl.className = "status"; return; }
+    if (route.state === "no_session") { statusEl.textContent = "No Claude session is watching this page right now. Copy the sentence above into a chat with Claude."; statusEl.className = "status warn"; btn.disabled = true; btn.dataset.noSend = "1"; return; }
     const mcp = await getMcp();
     if (!mcp) { statusEl.textContent = "This page can't message Claude here. Copy the sentence above into the chat."; statusEl.className = "status warn"; btn.disabled = true; btn.dataset.noSend = "1"; return; }
     if (!sessionFor()) { statusEl.textContent = "No Claude session is linked to this page yet. Copy the sentence above into a chat with Claude."; statusEl.className = "status warn"; btn.disabled = true; btn.dataset.noSend = "1"; return; }

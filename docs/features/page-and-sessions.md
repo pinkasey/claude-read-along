@@ -21,8 +21,12 @@ Status: **Shipped**, except where marked otherwise
 ## How the page asks Claude
 
 - When Claude loads a review, it records its session with that review, and as the page's linked session. Requests about a review go to the session that loaded it, or to the linked session when the review has none (see [reviews.md](reviews.md)).
-- **Open PR or repo** and **Post review** send the request to that session as a message, through the Claude Code connector. **Known issue:** claude.ai currently refuses this call ("connector access isn't confirmed for this artifact"), even after the permission is requested, so the copy-into-chat route below is the one that works.
-- Before sending, the page checks the reviewer's permission for the connector and, if it has not been given yet, asks for it with claude.ai's permission dialog. If the reviewer declined, the panel offers **Open permissions** (claude.ai's Permissions panel) to turn it back on.
+- **Open PR or repo** and **Post review** post the request as a comment on the page and send it to Claude (claude.ai's "Send to Claude" for comments), which wakes the Claude sessions watching the page (**Shipped**, [#15](https://github.com/pinkasey/claude-read-along/pull/15)). Claude watches the page whenever it loads a review into it.
+  - The request names the session of the review it is about ("For Claude session …"); only that session acts on it, and replies in the comment's thread. Without a named session, any watching session acts.
+  - claude.ai asks the reviewer once for permission to comment from the page. Only the page's editors can send to Claude.
+  - If no Claude session is watching the page, the panel says so and the button is off.
+- When the comment route is not available, the page falls back to sending a message through the Claude Code connector. **Known issue:** claude.ai refuses that call ("connector access isn't confirmed for this artifact"), so in practice the copy-into-chat route below is the fallback that works.
+- Before sending through the connector, the page checks the reviewer's permission for the connector and, if it has not been given yet, asks for it with claude.ai's permission dialog. If the reviewer declined, the panel offers **Open permissions** (claude.ai's Permissions panel) to turn it back on.
 - When a panel opens, the page checks whether it can message Claude for this person (a linked session, the connector, its send tool) and says so at once if not.
 - If sending fails, the panel shows the reason and the connector's details. For failures that can be retried, the button changes to **Try again**; the page never retries by itself, because a failed send may still have arrived.
 - If the page cannot send (no recorded session, the connector is unavailable or not allowed, the session has ended), the panel says so. Each panel always shows the sentence to paste into a chat instead, with a **Copy** button.
