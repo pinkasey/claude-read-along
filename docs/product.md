@@ -55,5 +55,5 @@ These limits shape the design and are not expected to change soon.
 | README screenshots and demo | Shipped ([#9](https://github.com/pinkasey/claude-read-along/pull/9)) |
 | Showing front matter and `<!-- comments -->` | Shipped ([#11](https://github.com/pinkasey/claude-read-along/pull/11)) |
 | Keeping several reviews on the page, switching between them, and loading each session's pull request automatically | Shipped ([#13](https://github.com/pinkasey/claude-read-along/pull/13)) |
-| Sending requests from the page to Claude | Known issue: claude.ai refuses the connector call; paste the request into the chat instead |
+| Sending requests from the page to Claude, as a comment sent to the watching session | Shipped ([#15](https://github.com/pinkasey/claude-read-along/pull/15)) |
 | The page starting its own Claude session when none is available | Planned (depends on the platform allowing it) |

@@ -97,7 +97,7 @@ Claude always asks before committing. Pull requests from forks cannot be committ
 
 ## Known limits
 
-- The page's **Open PR or repo** and **Post review** buttons are meant to send the request to your Claude Code session, but this does not work yet: claude.ai refuses the connector call. Each panel shows the sentence to paste into the chat instead, which works.
+- The page's **Open PR or repo** and **Post review** buttons send the request to Claude as a comment on the page, which reaches a Claude session only while one is watching the page (one that loaded a review into it, while it is open). Otherwise, each panel shows the sentence to paste into the chat.
 - The page cannot use the microphone itself, so voice commands use your operating system's dictation into the command box.
 - Speech usually stops when a phone's screen locks; the page keeps the screen awake while reading.
 

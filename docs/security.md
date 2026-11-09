@@ -37,6 +37,7 @@ The two libraries are loaded from cdnjs with integrity hashes, so a modified cop
 - The page sends fixed sentences. A pull request reference is reduced to `OWNER/REPO#N`, with names limited to letters, digits, `.`, `-` and `_`.
 - Claude treats text from pull requests, review comments, the reviewer's comments and page messages as data, not instructions.
 - Anything that commits asks the reviewer in the chat first, whatever started it.
+- Requests sent as comments are visible to everyone who can see the page's comments, and only the page's editors can send them to Claude. Claude acts only on comments sent to Claude that start with `[Read-Along page]` and name its own session (or no session); a plain comment never reaches Claude.
 
 ## Privacy
 
