@@ -68,7 +68,8 @@ Rules:
 - Clicking a section starts reading there.
 - Moving by sentence crosses into the neighbouring section at a section's edge. While reading, it reads on from the new sentence; while paused, it highlights that sentence, and play starts from it.
 - With **Continuous** on (the default), reading moves to the next section by itself, with a slightly longer pause after headings. With it off, reading stops after each section.
-- Pausing keeps the sentence position; play resumes from that sentence.
+- Pausing keeps the place within the sentence: play (the button, Space or K, or the play command) resumes from the word where reading stopped, not from the sentence's start (**Shipped**, [#14](https://github.com/pinkasey/claude-read-along/pull/14)). It uses the word positions the browser reports while speaking; with a voice that reports none, play resumes from the sentence's start.
+- Moving anywhere while paused (another sentence, section or file, or clicking a section) forgets the place within the sentence: play then starts at the start of the sentence it moved to.
 - Loading another document or switching files starts from the first section and sentence.
 - Keyboard shortcuts do not fire while typing in a field. Space and Enter on a focused button press that button, and Space on a focused checkbox ticks it; the arrow keys keep working after ticking one.
 
